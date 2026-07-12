@@ -1,0 +1,38 @@
+# Managed by earnkit (roles/odoo) — do not edit by hand; changes are overwritten.
+[options]
+; ---- database (external Postgres — the VM runs no database) ----
+db_host = {{ database_host }}
+db_port = {{ database_port }}
+db_user = {{ odoo_db_user }}
+db_password = {{ odoo_db_password }}
+; multitenant: one database per team, selected by request hostname.
+; with the default '^%d$', crm-<team>.{{ cohort_domain }} maps to DB crm-<team>.
+dbfilter = {{ odoo_dbfilter }}
+; database manager UI (keep False; add-team.yml provisions team DBs)
+list_db = {{ 'True' if odoo_list_db else 'False' }}
+
+; ---- master password (database management operations) ----
+admin_passwd = {{ odoo_admin_password }}
+
+; ---- paths ----
+data_dir = {{ odoo_data_dir }}
+addons_path = {{ odoo_source_dir }}/addons,{{ odoo_custom_addons_dir }}
+
+; ---- http ----
+; bind all interfaces: TLS + routing happen on the external reverse proxy,
+; which forwards to this VM's IP (not localhost).
+http_interface = 0.0.0.0
+http_port = {{ odoo_http_port }}
+gevent_port = {{ odoo_gevent_port }}
+proxy_mode = True
+
+; ---- workers & limits (small on purpose: shared cohort VM) ----
+workers = {{ odoo_workers }}
+max_cron_threads = {{ odoo_max_cron_threads }}
+limit_memory_soft = {{ odoo_limit_memory_soft }}
+limit_memory_hard = {{ odoo_limit_memory_hard }}
+limit_time_cpu = {{ odoo_limit_time_cpu }}
+limit_time_real = {{ odoo_limit_time_real }}
+
+; ---- logging: stdout -> journald (no logfile) ----
+log_level = info

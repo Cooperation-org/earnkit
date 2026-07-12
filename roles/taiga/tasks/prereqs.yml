@@ -1,0 +1,51 @@
+---
+- name: Install system packages for taiga
+  ansible.builtin.apt:
+    name:
+      - acl # lets ansible become the unprivileged taiga user
+      - build-essential
+      - git
+      - gettext # manage.py compilemessages
+      - libpq5
+      - libpq-dev # psycopg2 build
+      - libcairo2 # cairosvg runtime (svg thumbnails)
+      - python3-psycopg2 # community.postgresql modules (system python)
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# taiga-back 6.8.x needs Python 3.11 (see defaults/main.yml); Ubuntu 24.04
+# only ships 3.12, so pull 3.11 from deadsnakes.
+- name: Add deadsnakes PPA for Python {{ taiga_python_version }}
+  ansible.builtin.apt_repository:
+    repo: ppa:deadsnakes/ppa
+    state: present
+
+- name: Install Python {{ taiga_python_version }} for taiga-back
+  ansible.builtin.apt:
+    name:
+      - python{{ taiga_python_version }}
+      - python{{ taiga_python_version }}-venv
+      - python{{ taiga_python_version }}-dev
+    state: present
+
+- name: Create taiga system user
+  ansible.builtin.user:
+    name: "{{ taiga_user }}"
+    system: true
+    home: "{{ taiga_home }}"
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: Create taiga directory tree
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ taiga_user }}"
+    group: "{{ taiga_group }}"
+    mode: "0755"
+  loop:
+    - "{{ taiga_home }}"
+    - "{{ taiga_media_root }}"
+    - "{{ taiga_media_root }}/exports"
+    - "{{ taiga_static_root }}"

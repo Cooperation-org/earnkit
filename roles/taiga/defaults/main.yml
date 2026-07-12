@@ -1,0 +1,75 @@
+---
+# taiga role — INTERNAL knobs only. All site-specific configuration
+# (taiga_version, taiga_domain, DB/OIDC/rabbitmq credentials, taiga_http_port)
+# comes from the inventory: see inventory/example/group_vars/all.yml.
+
+taiga_user: taiga
+taiga_group: taiga
+taiga_home: /opt/taiga
+taiga_back_dir: "{{ taiga_home }}/taiga-back"
+taiga_events_dir: "{{ taiga_home }}/taiga-events"
+taiga_front_dir: "{{ taiga_home }}/taiga-front-dist"
+taiga_venv: "{{ taiga_home }}/venv"
+taiga_media_root: "{{ taiga_home }}/media"
+taiga_static_root: "{{ taiga_home }}/static"
+
+# taiga-back 6.8.x targets Python 3.11 (upstream builds on python:3.11-slim;
+# its pinned deps — Django 3.2, psycopg2 2.9.5 — are not 3.12-safe).
+# Ubuntu 24.04 ships 3.12 only, so we install 3.11 from the deadsnakes PPA.
+taiga_python_version: "3.11"
+
+# taiga-events is released on its own cadence and has NO 6.8.1 tag upstream
+# (verified 2026-07: tags jump 6.8.0 -> 6.9.0). 6.8.0 is the matching release.
+taiga_events_version: "6.8.0"
+
+# Upstream repos (https so no deploy keys are needed).
+taiga_back_repo: https://github.com/taigaio/taiga-back.git
+taiga_events_repo: https://github.com/taigaio/taiga-events.git
+taiga_front_repo: https://github.com/taigaio/taiga-front-dist.git
+
+# LinkedTrust auth plugin — pinned by commit (the repo has no release tags yet).
+# Bump the commit AND the check in tasks/back.yml notes when updating.
+taiga_linkedtrust_plugin_repo: https://github.com/Cooperation-org/taiga-contrib-linkedtrust-auth.git
+taiga_linkedtrust_plugin_version: dde1dc141a6012c205d145f40ed608d4db082759
+
+# OAuth redirect the IdP sends the browser back to after login. Stock
+# taiga-front has no LinkedTrust button (the plugin repo ships only the back
+# half); Marten is the login frontend — override this in group_vars to
+# "https://{{ marten_domain }}/oauth/callback" when Marten serves the button.
+taiga_oidc_redirect_uri: "https://{{ taiga_domain }}/oauth/callback"
+
+# Loopback binds fanned out by nginx on {{ taiga_http_port }}.
+taiga_back_bind: 127.0.0.1
+taiga_back_port: 8001
+taiga_events_port: 8888
+taiga_events_health_port: 8889 # taiga-events /healthz liveness endpoint
+
+# Process sizing / limits.
+taiga_gunicorn_workers: 3
+taiga_celery_concurrency: 2
+taiga_back_memory_max: 1G
+taiga_async_memory_max: 768M
+taiga_events_memory_max: 256M
+
+# Login/registration toggles (SSO via LinkedTrust is the intended login;
+# the plugin find-or-creates users regardless of PUBLIC_REGISTER_ENABLED).
+taiga_public_register_enabled: false
+taiga_default_login_enabled: true
+
+# One AMQP URL consumed by taiga-back events push, celery, and taiga-events.
+# RabbitMQ itself (user/vhost) is provisioned by the rabbitmq role.
+taiga_amqp_url: "amqp://{{ rabbitmq_taiga_user }}:{{ rabbitmq_taiga_password | urlencode }}@localhost:5672/{{ rabbitmq_taiga_vhost | urlencode }}"
+
+# Outbound email: console backend by default (mail lands in journald).
+# For real mail set taiga_email_backend to
+# django.core.mail.backends.smtp.EmailBackend and fill in the smtp vars.
+taiga_email_backend: django.core.mail.backends.console.EmailBackend
+taiga_default_from_email: "no-reply@{{ taiga_domain }}"
+taiga_smtp_host: localhost
+taiga_smtp_port: 587
+taiga_smtp_user: ""
+taiga_smtp_password: ""
+taiga_smtp_use_tls: true
+
+# Max upload size, used by nginx client_max_body_size.
+taiga_max_upload_size: 100M

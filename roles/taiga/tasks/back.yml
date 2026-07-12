@@ -1,0 +1,157 @@
+---
+# taiga-back: git checkout of the pinned tag, venv, requirements, LinkedTrust
+# plugin, settings/config.py, migrate/collectstatic, systemd units.
+
+- name: Check out taiga-back {{ taiga_version }}
+  ansible.builtin.git:
+    repo: "{{ taiga_back_repo }}"
+    dest: "{{ taiga_back_dir }}"
+    version: "{{ taiga_version }}"
+    depth: 1
+  become: true
+  become_user: "{{ taiga_user }}"
+  register: taiga_back_checkout
+  notify:
+    - Restart taiga-back
+    - Restart taiga-async
+
+- name: Create taiga venv (Python {{ taiga_python_version }})
+  ansible.builtin.command: python{{ taiga_python_version }} -m venv {{ taiga_venv }}
+  args:
+    creates: "{{ taiga_venv }}/bin/python"
+  become: true
+  become_user: "{{ taiga_user }}"
+
+- name: Ensure wheel in the venv (some pinned deps ship sdist only)
+  ansible.builtin.pip:
+    name: wheel
+    virtualenv: "{{ taiga_venv }}"
+  become: true
+  become_user: "{{ taiga_user }}"
+
+- name: Install taiga-back requirements
+  ansible.builtin.pip:
+    requirements: "{{ taiga_back_dir }}/requirements.txt"
+    virtualenv: "{{ taiga_venv }}"
+  become: true
+  become_user: "{{ taiga_user }}"
+  register: taiga_back_pip
+  notify:
+    - Restart taiga-back
+    - Restart taiga-async
+
+- name: Install taiga-back contrib requirements
+  ansible.builtin.pip:
+    requirements: "{{ taiga_back_dir }}/requirements-contribs.txt"
+    virtualenv: "{{ taiga_venv }}"
+  become: true
+  become_user: "{{ taiga_user }}"
+  notify:
+    - Restart taiga-back
+    - Restart taiga-async
+
+# pip reinstalls VCS requirements on every run, so guard with a presence
+# check to stay idempotent. NOTE: bumping taiga_linkedtrust_plugin_version
+# only takes effect if the plugin's setup.py version also changes — for a
+# same-version bump, `pip uninstall taiga-contrib-linkedtrust-auth` on the
+# host (or remove the venv) and re-run.
+- name: Check whether the LinkedTrust auth plugin is installed
+  ansible.builtin.command: "{{ taiga_venv }}/bin/pip show --quiet taiga-contrib-linkedtrust-auth"
+  register: taiga_lt_plugin_check
+  changed_when: false
+  failed_when: false
+
+- name: Install LinkedTrust auth plugin (pinned commit)
+  ansible.builtin.pip:
+    name: "git+{{ taiga_linkedtrust_plugin_repo }}@{{ taiga_linkedtrust_plugin_version }}#subdirectory=back"
+    virtualenv: "{{ taiga_venv }}"
+  become: true
+  become_user: "{{ taiga_user }}"
+  when: taiga_lt_plugin_check.rc != 0
+  notify:
+    - Restart taiga-back
+    - Restart taiga-async
+
+- name: Render taiga-back settings (settings/config.py)
+  ansible.builtin.template:
+    src: config.py.j2
+    dest: "{{ taiga_back_dir }}/settings/config.py"
+    owner: "{{ taiga_user }}"
+    group: "{{ taiga_group }}"
+    mode: "0640"
+  notify:
+    - Restart taiga-back
+    - Restart taiga-async
+
+- name: Apply taiga-back database migrations
+  ansible.builtin.command:
+    cmd: "{{ taiga_venv }}/bin/python manage.py migrate --noinput"
+    chdir: "{{ taiga_back_dir }}"
+  environment:
+    DJANGO_SETTINGS_MODULE: settings.config
+  become: true
+  become_user: "{{ taiga_user }}"
+  register: taiga_migrate
+  changed_when: "'No migrations to apply' not in taiga_migrate.stdout"
+
+- name: Load initial project templates (first install only)
+  ansible.builtin.shell:
+    cmd: >
+      {{ taiga_venv }}/bin/python manage.py loaddata initial_project_templates
+      && touch {{ taiga_home }}/.initial_project_templates_loaded
+    chdir: "{{ taiga_back_dir }}"
+    creates: "{{ taiga_home }}/.initial_project_templates_loaded"
+  environment:
+    DJANGO_SETTINGS_MODULE: settings.config
+  become: true
+  become_user: "{{ taiga_user }}"
+
+- name: Compile translation catalogs
+  ansible.builtin.command:
+    cmd: "{{ taiga_venv }}/bin/python manage.py compilemessages"
+    chdir: "{{ taiga_back_dir }}"
+  environment:
+    DJANGO_SETTINGS_MODULE: settings.config
+  become: true
+  become_user: "{{ taiga_user }}"
+  when: taiga_back_checkout.changed or taiga_back_pip.changed
+  changed_when: true
+
+- name: Collect static files
+  ansible.builtin.command:
+    cmd: "{{ taiga_venv }}/bin/python manage.py collectstatic --noinput"
+    chdir: "{{ taiga_back_dir }}"
+  environment:
+    DJANGO_SETTINGS_MODULE: settings.config
+  become: true
+  become_user: "{{ taiga_user }}"
+  register: taiga_collectstatic
+  changed_when: "'0 static files copied' not in taiga_collectstatic.stdout"
+
+- name: Install taiga-back systemd unit
+  ansible.builtin.template:
+    src: taiga-back.service.j2
+    dest: /etc/systemd/system/taiga-back.service
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart taiga-back
+
+- name: Install taiga-async systemd unit
+  ansible.builtin.template:
+    src: taiga-async.service.j2
+    dest: /etc/systemd/system/taiga-async.service
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart taiga-async
+
+- name: Enable and start taiga-back and taiga-async
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop:
+    - taiga-back
+    - taiga-async

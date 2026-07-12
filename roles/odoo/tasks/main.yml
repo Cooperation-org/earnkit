@@ -1,0 +1,145 @@
+---
+# Odoo 17 — native source install (no Docker), multitenant one-database-per-team.
+# Source under /opt/odoo/odoo, dedicated venv, systemd unit, journald logging.
+# All databases live on the external {{ database_host }} — this role creates
+# ONLY the login role (with CREATEDB); team databases are provisioned by
+# playbooks/add-team.yml.
+
+# --- system packages ----------------------------------------------------------
+
+- name: Install system build dependencies
+  ansible.builtin.apt:
+    name: "{{ odoo_apt_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# --- user & directories ---------------------------------------------------------
+
+- name: Create the odoo system user
+  ansible.builtin.user:
+    name: "{{ odoo_user }}"
+    system: true
+    home: "{{ odoo_home }}"
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: Create Odoo directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(odoo_user) }}"
+    group: "{{ item.group | default(odoo_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ odoo_home }}", mode: "0755" }
+    - { path: "{{ odoo_data_dir }}", mode: "0750" }
+    - { path: "{{ odoo_custom_addons_dir }}", mode: "0755" }
+    - { path: "{{ odoo_conf_dir }}", owner: root, mode: "0750" }
+
+# --- source & venv ---------------------------------------------------------------
+
+- name: Clone Odoo source (pinned branch {{ odoo_version }})
+  ansible.builtin.git:
+    repo: "{{ odoo_repo }}"
+    dest: "{{ odoo_source_dir }}"
+    version: "{{ odoo_version }}"
+    depth: 1
+    single_branch: true
+  become: true
+  become_user: "{{ odoo_user }}"
+  register: odoo_source
+  notify: Restart odoo
+
+- name: Ensure setuptools and wheel in the venv (py3.12 venvs ship without setuptools)
+  ansible.builtin.pip:
+    name:
+      - setuptools
+      - wheel
+    virtualenv: "{{ odoo_venv_dir }}"
+    virtualenv_command: /usr/bin/python3 -m venv
+  become: true
+  become_user: "{{ odoo_user }}"
+
+- name: Install Odoo python requirements into the venv
+  ansible.builtin.pip:
+    requirements: "{{ odoo_source_dir }}/requirements.txt"
+    virtualenv: "{{ odoo_venv_dir }}"
+  become: true
+  become_user: "{{ odoo_user }}"
+  notify: Restart odoo
+
+# --- wkhtmltopdf (optional, pinned) -----------------------------------------------
+
+- name: Install wkhtmltopdf (patched-qt build for report headers/footers)
+  when: odoo_install_wkhtmltopdf
+  block:
+    - name: Download pinned wkhtmltopdf package
+      ansible.builtin.get_url:
+        url: "{{ odoo_wkhtmltopdf_deb_url }}"
+        dest: "/usr/local/src/{{ odoo_wkhtmltopdf_deb_url | basename }}"
+        checksum: "sha256:{{ odoo_wkhtmltopdf_deb_sha256 }}"
+        mode: "0644"
+
+    - name: Install wkhtmltopdf package
+      ansible.builtin.apt:
+        deb: "/usr/local/src/{{ odoo_wkhtmltopdf_deb_url | basename }}"
+
+# --- rtlcss (optional — right-to-left languages only) ------------------------------
+
+- name: Install rtlcss for right-to-left language support
+  when: odoo_install_rtlcss
+  block:
+    - name: Install npm
+      ansible.builtin.apt:
+        name: npm
+        state: present
+
+    - name: Install rtlcss globally
+      community.general.npm:
+        name: rtlcss
+        global: true
+
+# --- database role on the external Postgres ----------------------------------------
+# psql over the network only — never SSH to the database host.
+# CREATEDB because Odoo (via add-team.yml's odoo-bin run) creates the
+# per-team crm-<team_slug> databases itself.
+
+- name: Ensure the Odoo login role exists on {{ database_host }} (LOGIN CREATEDB)
+  community.postgresql.postgresql_user:
+    login_host: "{{ database_host }}"
+    port: "{{ database_port }}"
+    login_user: "{{ database_admin_user }}"
+    login_password: "{{ database_admin_password }}"
+    login_db: postgres
+    name: "{{ odoo_db_user }}"
+    password: "{{ odoo_db_password }}"
+    role_attr_flags: LOGIN,CREATEDB
+  no_log: true
+
+# --- config & service ----------------------------------------------------------------
+
+- name: Template /etc/odoo/odoo.conf
+  ansible.builtin.template:
+    src: odoo.conf.j2
+    dest: "{{ odoo_conf_dir }}/odoo.conf"
+    owner: root
+    group: "{{ odoo_group }}"
+    mode: "0640"
+  notify: Restart odoo
+
+- name: Template the odoo systemd unit
+  ansible.builtin.template:
+    src: odoo.service.j2
+    dest: /etc/systemd/system/odoo.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart odoo
+
+- name: Enable and start odoo
+  ansible.builtin.systemd_service:
+    name: odoo
+    enabled: true
+    state: started
+    daemon_reload: true

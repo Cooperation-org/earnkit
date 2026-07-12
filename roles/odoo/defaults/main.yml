@@ -1,0 +1,78 @@
+---
+# roles/odoo — role defaults (tuning knobs; all safe to leave as-is).
+#
+# The SITE contract comes from group_vars (see inventory/example/group_vars/all.yml):
+#   database_host, database_port, database_admin_user, database_admin_password,
+#   odoo_version, odoo_db_user, odoo_db_password, odoo_admin_password,
+#   odoo_dbfilter, odoo_http_port
+# This role uses exactly those names and defines nothing that shadows them.
+
+# --- filesystem layout (mirrors our known-good production recipe) ------------
+odoo_user: odoo
+odoo_group: odoo
+odoo_home: /opt/odoo
+odoo_source_dir: "{{ odoo_home }}/odoo"
+odoo_venv_dir: "{{ odoo_home }}/venv"
+odoo_data_dir: "{{ odoo_home }}/data"
+odoo_custom_addons_dir: "{{ odoo_home }}/custom-addons"
+odoo_conf_dir: /etc/odoo
+odoo_repo: https://github.com/odoo/odoo.git   # branch pinned by odoo_version
+
+# --- server tuning — deliberately small: the VM is shared with Taiga & co ----
+odoo_workers: 2
+odoo_max_cron_threads: 1
+odoo_gevent_port: 8072                 # websocket/longpolling (required when workers > 0)
+odoo_limit_memory_soft: 1073741824     # 1 GiB per worker (Odoo default is 2 GiB)
+odoo_limit_memory_hard: 1610612736     # 1.5 GiB per worker
+odoo_limit_time_cpu: 60
+odoo_limit_time_real: 120
+# systemd cgroup ceiling for the whole service (workers + gevent + cron):
+odoo_systemd_memory_high: 3G
+odoo_systemd_memory_max: 4G
+
+# --- database manager exposure -----------------------------------------------
+# Keep false: team databases are created by playbooks/add-team.yml over the
+# network, never through the /web/database UI. Flip to true temporarily only
+# if you need the database manager during provisioning, then re-run the role.
+odoo_list_db: false
+
+# --- wkhtmltopdf (PDF reports: invoices, quotes, ...) -------------------------
+# Upstream publishes no Ubuntu 24.04 (noble) build; the jammy 0.12.6.1-3
+# patched-qt deb installs and runs cleanly on noble (widely reported; Odoo
+# needs the patched-qt build for headers/footers — the archive's wkhtmltopdf
+# package is unpatched and NOT sufficient).
+odoo_install_wkhtmltopdf: true
+odoo_wkhtmltopdf_deb_url: "https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-3/wkhtmltox_0.12.6.1-3.jammy_amd64.deb"
+# VERIFY: sha256 computed by us from the upstream GitHub release asset on
+# 2026-07-12 (upstream publishes no checksum file). Recompute if the URL changes.
+odoo_wkhtmltopdf_deb_sha256: "4f723b2691ad8638a9df960e0421d346d7315083e3583a334f33362280ddba15"
+
+# --- rtlcss — ONLY needed for right-to-left languages (Arabic, Hebrew) --------
+# (lessc/node-less is NOT needed: Odoo >= 12 compiles scss via the python
+# libsass package pulled in by requirements.txt.)
+odoo_install_rtlcss: false
+
+# --- apt build dependencies ----------------------------------------------------
+# Odoo 17.0 branch requirements.txt carries python_version >= '3.12' markers,
+# so Ubuntu 24.04's default Python 3.12 is supported. psycopg2 (not -binary)
+# is pinned and builds from source -> libpq-dev; python-ldap -> libldap-dev +
+# libsasl2-dev. Most other pins ship cp312 wheels; the remaining -dev packages
+# are cheap source-build fallbacks.
+odoo_apt_packages:
+  - git
+  - acl                    # reliable ansible become_user for the odoo user
+  - build-essential
+  - python3-dev
+  - python3-venv
+  - python3-pip
+  - python3-psycopg2       # for the community.postgresql tasks below (NOT used by Odoo itself)
+  - libpq-dev
+  - libxml2-dev
+  - libxslt1-dev
+  - libldap-dev            # noble name; libldap2-dev is a transitional alias now
+  - libsasl2-dev
+  - libjpeg-dev
+  - zlib1g-dev
+  - libffi-dev
+  - libssl-dev
+  - fonts-dejavu-core      # sane default fonts for PDF rendering

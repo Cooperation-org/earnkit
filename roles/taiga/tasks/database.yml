@@ -1,0 +1,27 @@
+---
+# Database + role on the EXTERNAL Postgres ({{ database_host }}), created over
+# the network with the admin credentials. Never SSH to the database host.
+
+- name: Create taiga database role
+  community.postgresql.postgresql_user:
+    login_host: "{{ database_host }}"
+    login_port: "{{ database_port }}"
+    login_user: "{{ database_admin_user }}"
+    login_password: "{{ database_admin_password }}"
+    login_db: postgres
+    name: "{{ taiga_db_user }}"
+    password: "{{ taiga_db_password }}"
+    state: present
+  no_log: true
+
+- name: Create taiga database
+  community.postgresql.postgresql_db:
+    login_host: "{{ database_host }}"
+    login_port: "{{ database_port }}"
+    login_user: "{{ database_admin_user }}"
+    login_password: "{{ database_admin_password }}"
+    name: "{{ taiga_db_name }}"
+    owner: "{{ taiga_db_user }}"
+    encoding: UTF-8
+    state: present
+  no_log: true

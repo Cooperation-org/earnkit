@@ -1,0 +1,30 @@
+# Managed by earnkit (roles/odoo) — do not edit by hand; changes are overwritten.
+[Unit]
+Description=Odoo {{ odoo_version }} (cohort CRM, one database per team)
+Documentation=https://www.odoo.com/documentation/17.0
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ odoo_user }}
+Group={{ odoo_group }}
+ExecStart={{ odoo_venv_dir }}/bin/python {{ odoo_source_dir }}/odoo-bin -c {{ odoo_conf_dir }}/odoo.conf
+Restart=on-failure
+RestartSec=5
+KillMode=mixed
+SyslogIdentifier=odoo
+
+# resource limits
+LimitNOFILE=65536
+MemoryHigh={{ odoo_systemd_memory_high }}
+MemoryMax={{ odoo_systemd_memory_max }}
+
+# hardening (kept moderate: /opt stays writable for data_dir/filestore)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

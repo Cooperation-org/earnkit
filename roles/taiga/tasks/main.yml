@@ -1,0 +1,15 @@
+---
+# Taiga — native systemd install (no Docker, per docs/DECISIONS.md):
+#   taiga-back {{ taiga_version }} (gunicorn on 127.0.0.1:8001) + taiga-async (celery)
+#   taiga-events {{ taiga_events_version }} (node ws on :8888)
+#   taiga-front-dist {{ taiga_version }} (static files)
+#   taiga-contrib-linkedtrust-auth (SSO, back half)
+#   nginx fan-out fragment on {{ taiga_http_port }}
+# Postgres lives on {{ database_host }} — created over the network, never SSH.
+
+- ansible.builtin.import_tasks: prereqs.yml
+- ansible.builtin.import_tasks: database.yml
+- ansible.builtin.import_tasks: back.yml
+- ansible.builtin.import_tasks: events.yml
+- ansible.builtin.import_tasks: front.yml
+- ansible.builtin.import_tasks: nginx.yml

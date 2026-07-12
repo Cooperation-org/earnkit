@@ -1,0 +1,6 @@
+---
+- name: Restart odoo
+  ansible.builtin.systemd_service:
+    name: odoo
+    state: restarted
+    daemon_reload: true
