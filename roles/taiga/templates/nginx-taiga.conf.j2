@@ -1,0 +1,66 @@
+# {{ ansible_managed }}
+# Taiga fan-out: front static + /api -> gunicorn + /events -> taiga-events ws
+# + /media + /static. Included by the nginx role from /etc/nginx/earnkit/.
+# TLS terminates upstream (Caddy on the proxy host), hence plain HTTP here
+# and the hardcoded X-Forwarded-Proto.
+
+server {
+    listen {{ taiga_http_port }};
+    listen [::]:{{ taiga_http_port }};
+    server_name {{ taiga_domain }};
+
+    client_max_body_size {{ taiga_max_upload_size }};
+    charset utf-8;
+
+    # taiga-front-dist (static SPA)
+    location / {
+        root {{ taiga_front_dir }}/dist/;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # taiga-back API (gunicorn on loopback)
+    location /api/ {
+        proxy_pass http://{{ taiga_back_bind }}:{{ taiga_back_port }}/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # Django admin
+    location /admin/ {
+        proxy_pass http://{{ taiga_back_bind }}:{{ taiga_back_port }}/admin/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # Collected Django static files
+    location /static/ {
+        alias {{ taiga_static_root }}/;
+    }
+
+    # Project dump downloads
+    location /media/exports/ {
+        alias {{ taiga_media_root }}/exports/;
+        add_header Content-Disposition "attachment";
+    }
+
+    # User uploads. NOTE: classic native-install behavior — attachment URLs
+    # are unguessable but NOT access-controlled (the token-protected storage
+    # service is not deployed). Acceptable for a cohort; revisit if needed.
+    location /media/ {
+        alias {{ taiga_media_root }}/;
+    }
+
+    # taiga-events websocket
+    location /events {
+        proxy_pass http://127.0.0.1:{{ taiga_events_port }}/events;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 7d;
+        proxy_send_timeout 7d;
+    }
+}

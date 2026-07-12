@@ -110,19 +110,22 @@
         login_password: "{{ amebo_db_password }}"
         db: "{{ amebo_db_name }}"
         query: >
-          INSERT INTO instances (name, config)
-          SELECT %(name)s, '{"allowed_tools": []}'::jsonb
-          WHERE NOT EXISTS (SELECT 1 FROM instances WHERE name = %(name)s)
+          INSERT INTO instances (name, slug, config)
+          SELECT %(name)s, %(slug)s, '{"allowed_tools": []}'::jsonb
+          WHERE NOT EXISTS (SELECT 1 FROM instances WHERE slug = %(slug)s)
         named_args:
           name: "{{ team_name }}"
+          slug: "{{ team_slug }}"
 
     # ---- GovKit: one org per team ------------------------------------------
     - name: "GovKit: org {{ team_slug }}"
       ansible.builtin.shell: |
         /opt/govkit/venv/bin/python /opt/govkit/src/manage.py shell -c "
-        from orgs.models import Org
+        from apps.orgs.models import Org, ValuationConfig
         o, created = Org.objects.get_or_create(
-            slug='{{ team_slug }}', defaults=dict(name='{{ team_name }}'))
+            slug='{{ team_slug }}',
+            defaults=dict(display_name='{{ team_name }}', unit_name='points'))
+        ValuationConfig.objects.get_or_create(org=o)
         print('created' if created else 'exists')
         "
       args:

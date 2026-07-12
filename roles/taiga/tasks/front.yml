@@ -1,0 +1,21 @@
+---
+# taiga-front-dist: prebuilt static frontend + conf.json.
+# conf.json is untracked upstream (only conf.example.json is committed), so
+# templating it into the checkout does not fight the git task.
+
+- name: Check out taiga-front-dist {{ taiga_version }}
+  ansible.builtin.git:
+    repo: "{{ taiga_front_repo }}"
+    dest: "{{ taiga_front_dir }}"
+    version: "{{ taiga_version }}"
+    depth: 1
+  become: true
+  become_user: "{{ taiga_user }}"
+
+- name: Render taiga-front conf.json
+  ansible.builtin.template:
+    src: conf.json.j2
+    dest: "{{ taiga_front_dir }}/dist/conf.json"
+    owner: "{{ taiga_user }}"
+    group: "{{ taiga_group }}"
+    mode: "0644"

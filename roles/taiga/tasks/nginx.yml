@@ -1,0 +1,23 @@
+---
+# nginx fan-out fragment. The nginx role installs nginx itself and includes
+# /etc/nginx/earnkit/*.conf; site.yml runs it AFTER this role, so on a fresh
+# VM nginx may not exist yet — the reload handler is guarded accordingly.
+
+- name: Ensure /etc/nginx/earnkit exists
+  ansible.builtin.file:
+    path: /etc/nginx/earnkit
+    state: directory
+    mode: "0755"
+
+- name: Render taiga nginx fan-out
+  ansible.builtin.template:
+    src: nginx-taiga.conf.j2
+    dest: /etc/nginx/earnkit/taiga.conf
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Check whether nginx is active
+  ansible.builtin.command: systemctl is-active --quiet nginx
+  register: taiga_nginx_active
+  changed_when: false
+  failed_when: false

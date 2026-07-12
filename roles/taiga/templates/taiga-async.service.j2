@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Taiga async tasks (celery worker + embedded beat)
+After=network-online.target rabbitmq-server.service
+Wants=network-online.target
+
+[Service]
+User={{ taiga_user }}
+Group={{ taiga_group }}
+WorkingDirectory={{ taiga_back_dir }}
+Environment=DJANGO_SETTINGS_MODULE=settings.config
+# -B = embedded beat, as in upstream's async entrypoint; keep the beat
+# schedule file out of the git checkout.
+ExecStart={{ taiga_venv }}/bin/celery -A taiga.celery worker -B \
+    --concurrency {{ taiga_celery_concurrency }} \
+    --schedule-filename {{ taiga_home }}/celerybeat-schedule \
+    -l INFO
+Restart=on-failure
+RestartSec=5
+
+# Hardening / limits
+MemoryMax={{ taiga_async_memory_max }}
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,39 @@
+---
+# roles/govkit — role defaults (tuning knobs; all safe to leave as-is).
+#
+# The SITE contract comes from group_vars (see inventory/example/group_vars/all.yml):
+#   database_host, database_port, database_admin_user, database_admin_password,
+#   govkit_repo, govkit_branch, govkit_domain, govkit_db_name, govkit_db_user,
+#   govkit_db_password, govkit_secret_key, govkit_http_port,
+#   oidc_issuer, govkit_oidc_client_id, govkit_oidc_client_secret
+# plus ONE new site var (add to your inventory):
+#   govkit_fernet_key — Fernet key encrypting task-source API tokens at rest
+#     (the app's GOVKIT_SECRET_KEY, distinct from Django's SECRET_KEY).
+#     Generate: python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# This role uses exactly those names and defines nothing that shadows them.
+
+# --- filesystem layout (cicd/update-govkit and add-team.yml assume these) -----
+govkit_user: govkit
+govkit_home: /opt/govkit
+govkit_src_dir: "{{ govkit_home }}/src"      # the git checkout
+govkit_venv_dir: "{{ govkit_home }}/venv"
+# django-environ auto-reads BASE_DIR/.env — BASE_DIR is the checkout root.
+govkit_env_file: "{{ govkit_src_dir }}/.env"
+
+# --- network -------------------------------------------------------------------
+# whitenoise serves static from inside gunicorn and the site reverse proxy
+# (Caddy on the Proxmox host) is OFF this VM → bind all interfaces, no local
+# nginx needed; ufw (base role) limits exposure.
+govkit_bind: "0.0.0.0"
+
+# --- gunicorn / systemd tuning ---------------------------------------------------
+govkit_gunicorn_workers: 3
+govkit_gunicorn_timeout: 30
+govkit_memory_max: 512M
+
+# Fernet key for stored task-source tokens. Empty works until a team configures
+# a Task Source (the app then refuses to save the token) — set it in group_vars.
+govkit_fernet_key: ""
+
+# --- derived (do not override) ----------------------------------------------------
+govkit_database_url: "postgres://{{ govkit_db_user }}:{{ govkit_db_password | urlencode }}@{{ database_host }}:{{ database_port }}/{{ govkit_db_name }}"

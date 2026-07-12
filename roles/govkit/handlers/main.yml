@@ -1,0 +1,6 @@
+---
+- name: restart govkit
+  ansible.builtin.systemd:
+    name: govkit
+    state: restarted
+    daemon_reload: true

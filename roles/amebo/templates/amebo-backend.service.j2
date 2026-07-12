@@ -1,0 +1,22 @@
+# Managed by earnkit (roles/amebo) — edits are overwritten on the next run.
+[Unit]
+Description=amebo backend (FastAPI API + Slack listener + schedulers)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ amebo_user }}
+Group={{ amebo_user }}
+WorkingDirectory={{ amebo_backend_dir }}
+EnvironmentFile={{ amebo_env_file }}
+Environment=PYTHONUNBUFFERED=1
+ExecStart={{ amebo_venv_dir }}/bin/python -m src.main
+Restart=on-failure
+RestartSec=5
+MemoryMax={{ amebo_memory_max }}
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

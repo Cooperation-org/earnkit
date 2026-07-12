@@ -1,0 +1,54 @@
+---
+# taiga-events: node websocket service on 127.0.0.1-proxied :{{ taiga_events_port }}.
+# Node/npm come from the base role.
+
+- name: Check out taiga-events {{ taiga_events_version }}
+  ansible.builtin.git:
+    repo: "{{ taiga_events_repo }}"
+    dest: "{{ taiga_events_dir }}"
+    version: "{{ taiga_events_version }}"
+    depth: 1
+  become: true
+  become_user: "{{ taiga_user }}"
+  register: taiga_events_checkout
+  notify: Restart taiga-events
+
+- name: Check for existing taiga-events node_modules
+  ansible.builtin.stat:
+    path: "{{ taiga_events_dir }}/node_modules"
+  register: taiga_events_node_modules
+
+- name: Install taiga-events node dependencies
+  ansible.builtin.command:
+    cmd: npm ci --omit=dev
+    chdir: "{{ taiga_events_dir }}"
+  become: true
+  become_user: "{{ taiga_user }}"
+  when: taiga_events_checkout.changed or not taiga_events_node_modules.stat.exists
+  changed_when: true
+  notify: Restart taiga-events
+
+- name: Render taiga-events environment file
+  ansible.builtin.template:
+    src: taiga-events.env.j2
+    dest: "{{ taiga_events_dir }}/.env"
+    owner: "{{ taiga_user }}"
+    group: "{{ taiga_group }}"
+    mode: "0640"
+  notify: Restart taiga-events
+
+- name: Install taiga-events systemd unit
+  ansible.builtin.template:
+    src: taiga-events.service.j2
+    dest: /etc/systemd/system/taiga-events.service
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart taiga-events
+
+- name: Enable and start taiga-events
+  ansible.builtin.systemd_service:
+    name: taiga-events
+    enabled: true
+    state: started
+    daemon_reload: true

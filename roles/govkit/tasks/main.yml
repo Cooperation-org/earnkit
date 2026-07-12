@@ -1,0 +1,106 @@
+---
+# GovKit — earned governance (Django 5 + gunicorn, whitenoise for static).
+# Native systemd, no Docker; database on {{ database_host }}.
+# Multitenant via its orgs app: ONE service serves every cohort team
+# (playbooks/add-team.yml creates an Org per team).
+
+- name: govkit apt packages (base role covers git/venv/build/psql-client)
+  ansible.builtin.apt:
+    name:
+      - python3-psycopg2   # for the community.postgresql tasks below (NOT the app venv)
+    state: present
+
+- name: govkit system user
+  ansible.builtin.user:
+    name: "{{ govkit_user }}"
+    system: true
+    home: "{{ govkit_home }}"
+    shell: /usr/sbin/nologin
+    create_home: true
+
+- name: Clone govkit
+  ansible.builtin.git:
+    repo: "{{ govkit_repo }}"
+    dest: "{{ govkit_src_dir }}"
+    version: "{{ govkit_branch }}"
+    force: false
+  become_user: "{{ govkit_user }}"
+  notify: restart govkit
+
+- name: venv + requirements (pinned by the repo's requirements.txt)
+  ansible.builtin.pip:
+    requirements: "{{ govkit_src_dir }}/requirements.txt"
+    virtualenv: "{{ govkit_venv_dir }}"
+    virtualenv_command: python3 -m venv
+  become_user: "{{ govkit_user }}"
+  notify: restart govkit
+
+# ---- database on {{ database_host }} (admin creds create; app uses its own role)
+- name: "Postgres role {{ govkit_db_user }}"
+  community.postgresql.postgresql_user:
+    login_host: "{{ database_host }}"
+    login_port: "{{ database_port }}"
+    login_user: "{{ database_admin_user }}"
+    login_password: "{{ database_admin_password }}"
+    name: "{{ govkit_db_user }}"
+    password: "{{ govkit_db_password }}"
+    state: present
+  no_log: true
+
+- name: "Postgres database {{ govkit_db_name }}"
+  community.postgresql.postgresql_db:
+    login_host: "{{ database_host }}"
+    login_port: "{{ database_port }}"
+    login_user: "{{ database_admin_user }}"
+    login_password: "{{ database_admin_password }}"
+    name: "{{ govkit_db_name }}"
+    owner: "{{ govkit_db_user }}"
+    state: present
+  no_log: true
+
+# ---- app config (.env is read by django-environ at BASE_DIR/.env AND by
+# systemd EnvironmentFile — manage.py below needs it in place first)
+- name: govkit .env
+  ansible.builtin.template:
+    src: govkit.env.j2
+    dest: "{{ govkit_env_file }}"
+    owner: "{{ govkit_user }}"
+    group: "{{ govkit_user }}"
+    mode: "0600"
+  notify: restart govkit
+
+# ---- Django migrate + collectstatic (idempotent by nature; changed_when
+# keys off their output so re-runs report ok, not changed)
+- name: govkit migrate
+  ansible.builtin.command: "{{ govkit_venv_dir }}/bin/python manage.py migrate --noinput"
+  args:
+    chdir: "{{ govkit_src_dir }}"
+  become_user: "{{ govkit_user }}"
+  register: govkit_migrate
+  changed_when: "'Applying' in govkit_migrate.stdout"
+  notify: restart govkit
+
+- name: govkit collectstatic (whitenoise manifest storage)
+  ansible.builtin.command: "{{ govkit_venv_dir }}/bin/python manage.py collectstatic --noinput"
+  args:
+    chdir: "{{ govkit_src_dir }}"
+  become_user: "{{ govkit_user }}"
+  register: govkit_static
+  changed_when: "'0 static files copied' not in govkit_static.stdout"
+  notify: restart govkit
+
+# ---- systemd (unit is named `govkit` — cicd/update-govkit restarts it) --------
+- name: govkit unit
+  ansible.builtin.template:
+    src: govkit.service.j2
+    dest: /etc/systemd/system/govkit.service
+    mode: "0644"
+  register: govkit_unit
+  notify: restart govkit
+
+- name: govkit enabled + started
+  ansible.builtin.systemd:
+    name: govkit
+    enabled: true
+    state: started
+    daemon_reload: "{{ govkit_unit.changed }}"

@@ -1,0 +1,27 @@
+# Managed by earnkit (roles/govkit) — edits are overwritten on the next run.
+[Unit]
+Description=GovKit (Django + gunicorn) — earned governance
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ govkit_user }}
+Group={{ govkit_user }}
+WorkingDirectory={{ govkit_src_dir }}
+EnvironmentFile={{ govkit_env_file }}
+Environment=PYTHONUNBUFFERED=1
+ExecStart={{ govkit_venv_dir }}/bin/gunicorn config.wsgi:application \
+  --bind {{ govkit_bind }}:{{ govkit_http_port }} \
+  --workers {{ govkit_gunicorn_workers }} \
+  --timeout {{ govkit_gunicorn_timeout }} \
+  --access-logfile - \
+  --error-logfile -
+Restart=on-failure
+RestartSec=5
+MemoryMax={{ govkit_memory_max }}
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

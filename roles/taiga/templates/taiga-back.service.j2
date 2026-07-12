@@ -1,0 +1,30 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Taiga backend API (gunicorn)
+After=network-online.target rabbitmq-server.service
+Wants=network-online.target
+
+[Service]
+User={{ taiga_user }}
+Group={{ taiga_group }}
+WorkingDirectory={{ taiga_back_dir }}
+Environment=DJANGO_SETTINGS_MODULE=settings.config
+ExecStart={{ taiga_venv }}/bin/gunicorn taiga.wsgi:application \
+    --name taiga-back \
+    --bind {{ taiga_back_bind }}:{{ taiga_back_port }} \
+    --workers {{ taiga_gunicorn_workers }} \
+    --worker-tmp-dir /dev/shm \
+    --log-level info \
+    --access-logfile -
+Restart=on-failure
+RestartSec=5
+
+# Hardening / limits
+MemoryMax={{ taiga_back_memory_max }}
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

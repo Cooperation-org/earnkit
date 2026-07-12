@@ -82,6 +82,9 @@ amebo_db_name: amebo
 amebo_db_user: amebo
 amebo_db_password: "VAULT-ME"
 amebo_anthropic_api_key: "VAULT-ME"
+# amebo refuses to boot without these two:
+amebo_jwt_secret_key: "VAULT-ME"     # python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+amebo_encryption_key: "VAULT-ME"     # same generator; Fernet key for stored credentials
 # Optional integrations (empty = disabled):
 amebo_slack_bot_token: ""
 amebo_slack_app_token: ""
@@ -97,6 +100,9 @@ govkit_db_name: govkit
 govkit_db_user: govkit
 govkit_db_password: "VAULT-ME"
 govkit_secret_key: "VAULT-ME"
+# Fernet key for task-source API tokens (distinct from Django SECRET_KEY);
+# needed once a team connects a Taiga source:
+govkit_fernet_key: "VAULT-ME"        # python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
 # ---------------------------------------------------------------------------
 # CI/CD — restricted deploy user the GitHub Actions workflows ssh in as

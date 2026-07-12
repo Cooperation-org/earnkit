@@ -1,0 +1,115 @@
+# -*- coding: utf-8 -*-
+# {{ ansible_managed }}
+# taiga-back settings for taiga {{ taiga_version }} — rendered by the earnkit
+# taiga role from settings/config.py.prod.example conventions. Do not edit on
+# the host; change the inventory and re-run the playbook.
+
+from .common import *  # noqa, pylint: disable=unused-wildcard-import
+
+#########################################
+# GENERIC
+#########################################
+
+DEBUG = False
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "{{ taiga_db_name }}",
+        "USER": "{{ taiga_db_user }}",
+        "PASSWORD": "{{ taiga_db_password }}",
+        "HOST": "{{ database_host }}",
+        "PORT": "{{ database_port }}",
+    }
+}
+
+SECRET_KEY = "{{ taiga_secret_key }}"
+
+TAIGA_SITES_SCHEME = "https"
+TAIGA_SITES_DOMAIN = "{{ taiga_domain }}"
+FORCE_SCRIPT_NAME = ""
+
+TAIGA_URL = f"{TAIGA_SITES_SCHEME}://{TAIGA_SITES_DOMAIN}{FORCE_SCRIPT_NAME}"
+SITES = {
+    "api": {"name": "api", "scheme": TAIGA_SITES_SCHEME, "domain": TAIGA_SITES_DOMAIN},
+    "front": {"name": "front", "scheme": TAIGA_SITES_SCHEME, "domain": f"{TAIGA_SITES_DOMAIN}{FORCE_SCRIPT_NAME}"},
+}
+
+DEFAULT_PROJECT_SLUG_PREFIX = False
+
+#########################################
+# MEDIA AND STATIC (served by the nginx fan-out)
+#########################################
+
+MEDIA_ROOT = "{{ taiga_media_root }}"
+MEDIA_URL = f"{TAIGA_URL}/media/"
+STATIC_ROOT = "{{ taiga_static_root }}"
+STATIC_URL = f"{TAIGA_URL}/static/"
+
+#########################################
+# EMAIL
+#########################################
+
+EMAIL_BACKEND = "{{ taiga_email_backend }}"
+CHANGE_NOTIFICATIONS_MIN_INTERVAL = 120  # seconds
+DEFAULT_FROM_EMAIL = "{{ taiga_default_from_email }}"
+EMAIL_HOST = "{{ taiga_smtp_host }}"
+EMAIL_PORT = {{ taiga_smtp_port }}
+EMAIL_HOST_USER = "{{ taiga_smtp_user }}"
+EMAIL_HOST_PASSWORD = "{{ taiga_smtp_password }}"
+EMAIL_USE_TLS = {{ taiga_smtp_use_tls | ternary('True', 'False') }}
+EMAIL_USE_SSL = False
+
+#########################################
+# EVENTS (RabbitMQ provisioned by the rabbitmq role)
+#########################################
+
+EVENTS_PUSH_BACKEND = "taiga.events.backends.rabbitmq.EventsPushBackend"
+EVENTS_PUSH_BACKEND_OPTIONS = {
+    "url": "{{ taiga_amqp_url }}"
+}
+
+#########################################
+# TAIGA ASYNC (celery — runs as the taiga-async systemd unit)
+#########################################
+
+CELERY_ENABLED = True
+
+from kombu import Queue  # noqa
+
+CELERY_BROKER_URL = "{{ taiga_amqp_url }}"
+CELERY_RESULT_BACKEND = None
+CELERY_ACCEPT_CONTENT = ["pickle"]
+CELERY_TASK_SERIALIZER = "pickle"
+CELERY_RESULT_SERIALIZER = "pickle"
+CELERY_TIMEZONE = "UTC"
+CELERY_TASK_DEFAULT_QUEUE = "tasks"
+CELERY_QUEUES = (
+    Queue("tasks", routing_key="task.#"),
+    Queue("transient", routing_key="transient.#", delivery_mode=1),
+)
+CELERY_TASK_DEFAULT_EXCHANGE = "tasks"
+CELERY_TASK_DEFAULT_EXCHANGE_TYPE = "topic"
+CELERY_TASK_DEFAULT_ROUTING_KEY = "task.default"
+
+#########################################
+# REGISTRATION / TELEMETRY
+#########################################
+
+# LinkedTrust SSO is the login path; the plugin find-or-creates users on
+# first SSO login regardless of this flag.
+PUBLIC_REGISTER_ENABLED = {{ taiga_public_register_enabled | ternary('True', 'False') }}
+
+ENABLE_TELEMETRY = False
+
+#########################################
+# LINKEDTRUST AUTH PLUGIN
+# (Cooperation-org/taiga-contrib-linkedtrust-auth, back half)
+#########################################
+
+INSTALLED_APPS += ["taiga_contrib_linkedtrust_auth"]
+
+LINKEDTRUST_URL = "{{ oidc_issuer }}"
+LINKEDTRUST_CLIENT_ID = "{{ taiga_oidc_client_id }}"
+LINKEDTRUST_CLIENT_SECRET = "{{ taiga_oidc_client_secret }}"
+LINKEDTRUST_REDIRECT_URI = "{{ taiga_oidc_redirect_uri }}"

@@ -1,0 +1,25 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Taiga events (websocket gateway)
+After=network-online.target rabbitmq-server.service
+Wants=network-online.target
+
+[Service]
+User={{ taiga_user }}
+Group={{ taiga_group }}
+WorkingDirectory={{ taiga_events_dir }}
+Environment=NODE_ENV=production
+# node comes from the base role; env lookup keeps this unit path-agnostic.
+ExecStart=/usr/bin/env node src/index.js
+Restart=on-failure
+RestartSec=5
+
+# Hardening / limits
+MemoryMax={{ taiga_events_memory_max }}
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

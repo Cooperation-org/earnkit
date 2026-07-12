@@ -1,0 +1,29 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Restart taiga-back
+  ansible.builtin.service:
+    name: taiga-back
+    state: restarted
+
+- name: Restart taiga-async
+  ansible.builtin.service:
+    name: taiga-async
+    state: restarted
+
+- name: Restart taiga-events
+  ansible.builtin.service:
+    name: taiga-events
+    state: restarted
+
+# Guarded: on a fresh VM the nginx role (which installs nginx and includes
+# /etc/nginx/earnkit/*.conf) runs after this role, so nginx may not be active
+# yet — it will pick the fragment up when it first starts. On re-runs, a
+# changed fragment reloads the running nginx.
+- name: Reload nginx
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+  when: taiga_nginx_active.rc | default(1) == 0

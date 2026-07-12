@@ -58,7 +58,8 @@ taiga_default_login_enabled: true
 
 # One AMQP URL consumed by taiga-back events push, celery, and taiga-events.
 # RabbitMQ itself (user/vhost) is provisioned by the rabbitmq role.
-taiga_amqp_url: "amqp://{{ rabbitmq_taiga_user }}:{{ rabbitmq_taiga_password | urlencode }}@localhost:5672/{{ rabbitmq_taiga_vhost | urlencode }}"
+# (urlencode leaves "/" alone, so escape it explicitly for password/vhost.)
+taiga_amqp_url: "amqp://{{ rabbitmq_taiga_user }}:{{ rabbitmq_taiga_password | urlencode | replace('/', '%2F') }}@localhost:5672/{{ rabbitmq_taiga_vhost | urlencode | replace('/', '%2F') }}"
 
 # Outbound email: console backend by default (mail lands in journald).
 # For real mail set taiga_email_backend to

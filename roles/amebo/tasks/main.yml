@@ -1,0 +1,133 @@
+---
+# amebo — the team's knowledge-cooperation agent (FastAPI + Slack listener +
+# schedulers, one process: `python -m src.main`). Native systemd, no Docker.
+# Database lives on {{ database_host }} — nothing stateful on this VM.
+# Multitenant via its `instances` table: ONE service serves every cohort team
+# (playbooks/add-team.yml inserts an instance row per team).
+
+- name: amebo apt packages (base role covers git/venv/build/psql-client)
+  ansible.builtin.apt:
+    name:
+      - python3-psycopg2   # for the community.postgresql tasks below (NOT the app venv)
+      - libmagic1          # python-magic (file-type detection)
+    state: present
+
+# /opt/amebo IS the git checkout, so create the user without a home skeleton
+# (.bashrc etc. would make the clone target non-empty and break the git module).
+- name: amebo system user
+  ansible.builtin.user:
+    name: "{{ amebo_user }}"
+    system: true
+    home: "{{ amebo_home }}"
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: amebo checkout dir
+  ansible.builtin.file:
+    path: "{{ amebo_home }}"
+    state: directory
+    owner: "{{ amebo_user }}"
+    group: "{{ amebo_user }}"
+    mode: "0755"
+
+- name: Clone amebo
+  ansible.builtin.git:
+    repo: "{{ amebo_repo }}"
+    dest: "{{ amebo_home }}"
+    version: "{{ amebo_branch }}"
+    force: false
+  become_user: "{{ amebo_user }}"
+  notify: restart amebo-backend
+
+- name: venv + backend requirements (pinned by the repo's requirements.txt)
+  ansible.builtin.pip:
+    requirements: "{{ amebo_backend_dir }}/requirements.txt"
+    virtualenv: "{{ amebo_venv_dir }}"
+    virtualenv_command: python3 -m venv
+  become_user: "{{ amebo_user }}"
+  notify: restart amebo-backend
+
+# ---- database on {{ database_host }} (admin creds create; app uses its own role)
+- name: "Postgres role {{ amebo_db_user }}"
+  community.postgresql.postgresql_user:
+    login_host: "{{ database_host }}"
+    login_port: "{{ database_port }}"
+    login_user: "{{ database_admin_user }}"
+    login_password: "{{ database_admin_password }}"
+    name: "{{ amebo_db_user }}"
+    password: "{{ amebo_db_password }}"
+    state: present
+  no_log: true
+
+- name: "Postgres database {{ amebo_db_name }}"
+  community.postgresql.postgresql_db:
+    login_host: "{{ database_host }}"
+    login_port: "{{ database_port }}"
+    login_user: "{{ database_admin_user }}"
+    login_password: "{{ database_admin_password }}"
+    name: "{{ amebo_db_name }}"
+    owner: "{{ amebo_db_user }}"
+    state: present
+  no_log: true
+
+# schema.sql does CREATE EXTENSION IF NOT EXISTS vector, but it runs as the
+# unprivileged DB owner — creating an untrusted extension needs superuser, so
+# do it here with the admin creds. (pgvector must be INSTALLED on the DB host.)
+- name: pgvector extension in {{ amebo_db_name }}
+  community.postgresql.postgresql_ext:
+    login_host: "{{ database_host }}"
+    login_port: "{{ database_port }}"
+    login_user: "{{ database_admin_user }}"
+    login_password: "{{ database_admin_password }}"
+    db: "{{ amebo_db_name }}"
+    name: vector
+    state: present
+  no_log: true
+
+# ---- app config (.env is read by systemd EnvironmentFile AND python-dotenv,
+# and the migration runner takes DATABASE_URL from it — so template it first)
+- name: amebo .env
+  ansible.builtin.template:
+    src: amebo.env.j2
+    dest: "{{ amebo_env_file }}"
+    owner: "{{ amebo_user }}"
+    group: "{{ amebo_user }}"
+    mode: "0600"
+  notify: restart amebo-backend
+
+# ---- schema + migrations (amebo ships NO migration runner of its own; this
+# ledger-based script is shared with cicd's update-amebo)
+- name: earnkit bin dir
+  ansible.builtin.file:
+    path: /opt/earnkit/bin
+    state: directory
+    mode: "0755"
+
+- name: amebo migration runner
+  ansible.builtin.template:
+    src: apply-amebo-migrations.sh.j2
+    dest: /opt/earnkit/bin/apply-amebo-migrations
+    mode: "0755"
+
+- name: Apply amebo schema + numbered migrations
+  ansible.builtin.command: /opt/earnkit/bin/apply-amebo-migrations
+  become_user: "{{ amebo_user }}"
+  register: amebo_migrations
+  changed_when: amebo_migrations.stdout_lines[-1] != 'APPLIED=0'
+  notify: restart amebo-backend
+
+# ---- systemd -------------------------------------------------------------------
+- name: amebo-backend unit
+  ansible.builtin.template:
+    src: amebo-backend.service.j2
+    dest: /etc/systemd/system/amebo-backend.service
+    mode: "0644"
+  register: amebo_unit
+  notify: restart amebo-backend
+
+- name: amebo-backend enabled + started
+  ansible.builtin.systemd:
+    name: amebo-backend
+    enabled: true
+    state: started
+    daemon_reload: "{{ amebo_unit.changed }}"

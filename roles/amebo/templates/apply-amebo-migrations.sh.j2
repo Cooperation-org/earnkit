@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Managed by earnkit (roles/amebo) — edits are overwritten on the next run.
+#
+# Apply amebo's SQL schema + numbered migrations, each exactly once.
+# amebo ships NO general migration runner (checked 2026-07-12): the base schema
+# is backend/src/db/schema.sql and deltas are backend/migrations/NNN_*.sql
+# (numbering starts at 005 — 001-004 are folded into schema.sql).
+# A ledger table `_earnkit_migrations` in the amebo DB records what has run,
+# so re-running is always safe. Invoked by roles/amebo and cicd/update-amebo.
+set -euo pipefail
+
+ENV_FILE="{{ amebo_env_file }}"
+BACKEND="{{ amebo_backend_dir }}"
+SCHEMA="$BACKEND/src/db/schema.sql"
+MIG_DIR="$BACKEND/migrations"
+
+DB_URL=$(grep -m1 '^DATABASE_URL=' "$ENV_FILE" | cut -d= -f2-)
+[ -n "$DB_URL" ] || { echo "DATABASE_URL not found in $ENV_FILE" >&2; exit 1; }
+
+q()       { psql "$DB_URL" -qAt -v ON_ERROR_STOP=1 -c "$1"; }
+applied() { [ "$(q "SELECT 1 FROM _earnkit_migrations WHERE filename = '$1'")" = "1" ]; }
+apply()   { psql "$DB_URL" -q -v ON_ERROR_STOP=1 --single-transaction -f "$1"; }
+record()  { q "INSERT INTO _earnkit_migrations (filename) VALUES ('$1')"; }
+
+q "CREATE TABLE IF NOT EXISTS _earnkit_migrations (
+     filename   text PRIMARY KEY,
+     applied_at timestamptz NOT NULL DEFAULT now())"
+
+count=0
+
+# 000: base schema — everything migrations 005+ build on.
+if ! applied "000_base_schema.sql"; then
+    apply "$SCHEMA"
+    record "000_base_schema.sql"
+    echo "applied 000_base_schema.sql (src/db/schema.sql)"
+    count=$((count + 1))
+fi
+
+# Compat shim: schema.sql already creates two indexes that migration 005
+# re-creates WITHOUT `IF NOT EXISTS`. Drop them just before 005 first runs
+# (005 recreates both), so 005 applies cleanly on a fresh database.
+if ! applied "005_backfill_scheduling.sql"; then
+    q "DROP INDEX IF EXISTS idx_backfill_schedules_workspace"
+    q "DROP INDEX IF EXISTS idx_backfill_schedules_active"
+fi
+
+for f in "$MIG_DIR"/*.sql; do
+    b=$(basename "$f")
+    if ! applied "$b"; then
+        apply "$f"
+        record "$b"
+        echo "applied $b"
+        count=$((count + 1))
+    fi
+done
+
+echo "APPLIED=$count"

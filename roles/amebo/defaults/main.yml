@@ -1,0 +1,36 @@
+---
+# roles/amebo — role defaults (tuning knobs; all safe to leave as-is).
+#
+# The SITE contract comes from group_vars (see inventory/example/group_vars/all.yml):
+#   database_host, database_port, database_admin_user, database_admin_password,
+#   amebo_repo, amebo_branch, amebo_db_name, amebo_db_user, amebo_db_password,
+#   amebo_api_port, amebo_anthropic_api_key,
+#   amebo_slack_bot_token, amebo_slack_app_token, amebo_abra_database_url
+# plus TWO new required site vars (the app refuses to start without them):
+#   amebo_jwt_secret_key   — signs API auth tokens (JWT_SECRET_KEY)
+#   amebo_encryption_key   — encrypts stored credentials at rest (ENCRYPTION_KEY)
+# Generate each with: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+# This role uses exactly those names and defines nothing that shadows them.
+
+# --- filesystem layout (cicd/update-amebo and add-team.yml assume these) ------
+amebo_user: amebo
+amebo_home: /opt/amebo                       # the git checkout itself
+amebo_backend_dir: "{{ amebo_home }}/backend"
+amebo_venv_dir: "{{ amebo_home }}/venv"      # cicd update script pins this path
+amebo_env_file: "{{ amebo_backend_dir }}/.env"  # read by systemd AND python-dotenv (cwd)
+
+# --- network -------------------------------------------------------------------
+# The site reverse proxy (Caddy on the Proxmox host) is OFF this VM, so the
+# API must listen on all interfaces; ufw (base role) limits exposure.
+amebo_api_host: "0.0.0.0"
+
+# --- Slack transport (only rendered when slack tokens are configured) ----------
+# false = Socket Mode (needs amebo_slack_app_token); true = HTTP Events API.
+amebo_use_event_subscriptions: false
+
+# --- systemd resource ceiling ---------------------------------------------------
+# sentence-transformers keeps an embedding model resident (torch) — leave headroom.
+amebo_memory_max: 3G
+
+# --- derived (do not override) ---------------------------------------------------
+amebo_database_url: "postgresql://{{ amebo_db_user }}:{{ amebo_db_password | urlencode }}@{{ database_host }}:{{ database_port }}/{{ amebo_db_name }}"
