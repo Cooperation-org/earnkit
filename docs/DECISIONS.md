@@ -30,3 +30,9 @@ Open questions for Golda (from the 7/6 spec, still open):
 - Hostname scheme (affects Odoo dbfilter and OIDC redirect URIs).
 - Slack app registration per-team vs one app (affects amebo config).
 - Confirm Odoo one-DB-per-team over multi-company (spec leans per-team DB).
+- Taiga OIDC redirect URI: the LinkedTrust plugin ships back-half only; the
+  login button lives in the frontend — likely Marten. Default is the taiga
+  domain; probably wants https://<marten_domain>/oauth/callback. Confirm.
+- Taiga /media is served without access control (classic native install;
+  URLs unguessable). Revisit if cohort privacy requires the protected
+  storage service.
