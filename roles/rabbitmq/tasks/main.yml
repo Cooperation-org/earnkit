@@ -1,0 +1,27 @@
+---
+# RabbitMQ — the only stateful non-Postgres dependency (taiga events/async).
+- name: Install rabbitmq-server
+  ansible.builtin.apt:
+    name: rabbitmq-server
+    state: present
+
+- name: RabbitMQ running + enabled
+  ansible.builtin.service:
+    name: rabbitmq-server
+    state: started
+    enabled: true
+
+- name: Taiga vhost
+  community.rabbitmq.rabbitmq_vhost:
+    name: "{{ rabbitmq_taiga_vhost }}"
+    state: present
+
+- name: Taiga rabbitmq user
+  community.rabbitmq.rabbitmq_user:
+    user: "{{ rabbitmq_taiga_user }}"
+    password: "{{ rabbitmq_taiga_password }}"
+    vhost: "{{ rabbitmq_taiga_vhost }}"
+    configure_priv: ".*"
+    read_priv: ".*"
+    write_priv: ".*"
+    state: present

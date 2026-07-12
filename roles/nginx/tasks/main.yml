@@ -1,0 +1,32 @@
+---
+# nginx serves static fan-outs (taiga front, marten build) — service roles drop
+# their server blocks into /etc/nginx/earnkit/*.conf.
+- name: Install nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+
+- name: earnkit conf dir
+  ansible.builtin.file:
+    path: /etc/nginx/earnkit
+    state: directory
+    mode: "0755"
+
+- name: Include earnkit confs
+  ansible.builtin.lineinfile:
+    path: /etc/nginx/nginx.conf
+    insertafter: 'include /etc/nginx/sites-enabled'
+    line: '        include /etc/nginx/earnkit/*.conf;'
+  notify: reload nginx
+
+- name: Drop the distro default site (port 80 collision)
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: reload nginx
+
+- name: nginx running + enabled
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true

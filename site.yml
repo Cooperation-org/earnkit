@@ -1,0 +1,17 @@
+---
+# earnkit — full-stack playbook for a fresh cohort-services VM.
+# Native systemd, no Docker, no local Postgres (databases live on
+# {{ database_host }}). Run add-team.yml afterwards for each team.
+- name: Provision the earned-governance stack
+  hosts: cohort
+  become: true
+  roles:
+    - { role: base,     tags: [base] }
+    - { role: rabbitmq, tags: [rabbitmq, taiga] }
+    - { role: taiga,    tags: [taiga] }
+    - { role: marten,   tags: [marten] }
+    - { role: odoo,     tags: [odoo] }
+    - { role: amebo,    tags: [amebo] }
+    - { role: govkit,   tags: [govkit] }
+    - { role: nginx,    tags: [nginx] }
+    - { role: cicd,     tags: [cicd] }

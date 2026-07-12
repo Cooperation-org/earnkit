@@ -1,0 +1,54 @@
+---
+# Marten — modern Taiga frontend (SvelteKit static build served by nginx).
+# Built from source; earnkit never patches it.
+- name: marten system user
+  ansible.builtin.user:
+    name: marten
+    system: true
+    home: /opt/marten
+    shell: /usr/sbin/nologin
+    create_home: true
+
+- name: Clone marten
+  ansible.builtin.git:
+    repo: "{{ marten_repo }}"
+    dest: /opt/marten/src
+    version: "{{ marten_branch }}"
+    force: false
+  become_user: marten
+  register: marten_git
+
+- name: Build env (.env for vite)
+  ansible.builtin.template:
+    src: env.j2
+    dest: /opt/marten/src/.env
+    owner: marten
+    mode: "0640"
+  register: marten_env
+
+- name: npm ci
+  ansible.builtin.command: npm ci
+  args:
+    chdir: /opt/marten/src
+  become_user: marten
+  when: marten_git.changed or marten_env.changed
+
+- name: npm run build
+  ansible.builtin.command: npm run build
+  args:
+    chdir: /opt/marten/src
+  become_user: marten
+  when: marten_git.changed or marten_env.changed
+
+- name: nginx server block
+  ansible.builtin.template:
+    src: nginx-marten.conf.j2
+    dest: /etc/nginx/earnkit/marten.conf
+    mode: "0644"
+  register: marten_nginx
+
+- name: reload nginx
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+  when: marten_nginx.changed

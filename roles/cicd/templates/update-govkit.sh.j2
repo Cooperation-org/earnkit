@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# earnkit CI/CD: update govkit from its repo, migrate, collectstatic, restart.
+set -euo pipefail
+cd /opt/govkit/src
+sudo -u govkit git fetch origin
+sudo -u govkit git reset --hard "origin/{{ govkit_branch }}"
+sudo -u govkit /opt/govkit/venv/bin/pip install -q -r requirements.txt
+sudo -u govkit /opt/govkit/venv/bin/python manage.py migrate --noinput
+sudo -u govkit /opt/govkit/venv/bin/python manage.py collectstatic --noinput
+systemctl restart govkit
+systemctl is-active govkit

@@ -1,0 +1,65 @@
+---
+# Base system for a fresh Ubuntu 24.04 cohort VM. No app code here.
+- name: Apt update (cache valid 1h)
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Base packages
+  ansible.builtin.apt:
+    name:
+      - git
+      - build-essential
+      - python3
+      - python3-venv
+      - python3-dev
+      - postgresql-client        # DB creation runs from this VM against database_host
+      - libpq-dev
+      - acl                      # become_user for unprivileged users
+      - ufw
+      - unattended-upgrades
+      - curl
+      - gettext                  # taiga compilemessages
+    state: present
+
+- name: Node.js 20.x apt repo (taiga-events, marten build)
+  ansible.builtin.shell: |
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  args:
+    creates: /etc/apt/sources.list.d/nodesource.list
+
+- name: Node.js
+  ansible.builtin.apt:
+    name: nodejs
+    state: present
+    update_cache: true
+
+- name: Persistent journald (survive reboots)
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/journald.conf
+    regexp: '^#?Storage='
+    line: 'Storage=persistent'
+  notify: restart journald
+
+- name: UFW allow ssh
+  community.general.ufw:
+    rule: allow
+    name: OpenSSH
+
+- name: UFW allow service ports
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "{{ taiga_http_port }}"
+    - "{{ marten_http_port }}"
+    - "{{ odoo_http_port }}"
+    - "{{ amebo_api_port }}"
+    - "{{ govkit_http_port }}"
+
+- name: UFW enabled
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# earnkit CI/CD: update amebo from its repo and restart. Invoked by the
+# amebo repo's GitHub Actions workflow via: sudo /opt/earnkit/bin/update-amebo
+set -euo pipefail
+cd /opt/amebo
+sudo -u amebo git fetch origin
+sudo -u amebo git reset --hard "origin/{{ amebo_branch }}"
+sudo -u amebo /opt/amebo/venv/bin/pip install -q -r backend/requirements.txt
+# apply any new numbered migrations (same ledger the playbook uses)
+/opt/earnkit/bin/apply-amebo-migrations 2>/dev/null || true
+systemctl restart amebo-backend
+systemctl is-active amebo-backend

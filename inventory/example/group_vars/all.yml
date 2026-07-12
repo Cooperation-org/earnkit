@@ -1,0 +1,112 @@
+---
+# earnkit — all site-specific configuration. SAMPLE VALUES ONLY.
+# Copy the inventory/example dir out of the repo, fill in, protect (vault the
+# secrets: `ansible-vault encrypt_string ...`). Nothing here is optional unless
+# marked optional.
+
+# ---------------------------------------------------------------------------
+# Shared
+# ---------------------------------------------------------------------------
+database_host: 10.0.0.100            # external Postgres; the VM runs NO database
+database_port: 5432
+# Admin credentials used ONLY to create databases/roles at provision time.
+database_admin_user: postgres
+database_admin_password: "VAULT-ME"
+
+# Base domain for the cohort services. Default hostname scheme (override per
+# service below if your scheme differs):
+#   taiga.{{ cohort_domain }}, crm-<team>.{{ cohort_domain }}, ...
+cohort_domain: cohort.example.org
+
+# LinkedTrust OIDC provider (the IdP is NOT on this VM).
+oidc_issuer: https://live.linkedtrust.us
+# One client per service, registered on the IdP by the operator:
+govkit_oidc_client_id: "lt_xxxxxxxxxxxxxxxx"
+govkit_oidc_client_secret: "VAULT-ME"
+taiga_oidc_client_id: "lt_xxxxxxxxxxxxxxxx"
+taiga_oidc_client_secret: "VAULT-ME"
+odoo_oidc_client_id: "lt_xxxxxxxxxxxxxxxx"
+odoo_oidc_client_secret: "VAULT-ME"
+amebo_oidc_client_id: "lt_xxxxxxxxxxxxxxxx"
+amebo_oidc_client_secret: "VAULT-ME"
+
+# ---------------------------------------------------------------------------
+# Ports (reverse-proxy targets; route hostnames to these from your proxy)
+# ---------------------------------------------------------------------------
+taiga_http_port: 8080        # nginx fan-out: front static + back API + events ws
+marten_http_port: 8081       # nginx: marten static build
+odoo_http_port: 8069
+amebo_api_port: 8000
+govkit_http_port: 8010
+
+# ---------------------------------------------------------------------------
+# Taiga (task tracker) — native install, versions pinned
+# ---------------------------------------------------------------------------
+taiga_version: "6.8.1"                    # taiga-back / taiga-front-dist tag
+taiga_domain: "taiga.{{ cohort_domain }}"
+taiga_db_name: taiga
+taiga_db_user: taiga
+taiga_db_password: "VAULT-ME"
+taiga_secret_key: "VAULT-ME"
+taiga_admin_email: admin@example.org
+# RabbitMQ (local, the only stateful non-Postgres dep; used by taiga events/async)
+rabbitmq_taiga_user: taiga
+rabbitmq_taiga_password: "VAULT-ME"
+rabbitmq_taiga_vhost: taiga
+
+# ---------------------------------------------------------------------------
+# Marten (Taiga frontend) — built from source, served static
+# ---------------------------------------------------------------------------
+marten_repo: git@github.com:Cooperation-org/marten.git
+marten_branch: main
+marten_domain: "martin.{{ cohort_domain }}"
+
+# ---------------------------------------------------------------------------
+# Odoo 17 (CRM) — native source install; ONE DATABASE PER TEAM
+# ---------------------------------------------------------------------------
+odoo_version: "17.0"                      # git branch of odoo/odoo
+odoo_db_user: odoo
+odoo_db_password: "VAULT-ME"
+odoo_admin_password: "VAULT-ME"           # master password (db management)
+# Team CRM hostname scheme; %d must resolve to the team's database name.
+# Default: crm-<team_slug>.{{ cohort_domain }} with database crm-<team_slug>.
+odoo_dbfilter: "^%d$"
+
+# ---------------------------------------------------------------------------
+# amebo (team agent) — from source; multitenant via its instances table
+# ---------------------------------------------------------------------------
+amebo_repo: git@github.com:Cooperation-org/amebo.git
+amebo_branch: main
+amebo_domain: "amebo.{{ cohort_domain }}"
+amebo_db_name: amebo
+amebo_db_user: amebo
+amebo_db_password: "VAULT-ME"
+amebo_anthropic_api_key: "VAULT-ME"
+# Optional integrations (empty = disabled):
+amebo_slack_bot_token: ""
+amebo_slack_app_token: ""
+amebo_abra_database_url: ""
+
+# ---------------------------------------------------------------------------
+# GovKit (earned governance) — from source
+# ---------------------------------------------------------------------------
+govkit_repo: git@github.com:Cooperation-org/govkit.git
+govkit_branch: main
+govkit_domain: "govkit.{{ cohort_domain }}"
+govkit_db_name: govkit
+govkit_db_user: govkit
+govkit_db_password: "VAULT-ME"
+govkit_secret_key: "VAULT-ME"
+
+# ---------------------------------------------------------------------------
+# CI/CD — restricted deploy user the GitHub Actions workflows ssh in as
+# ---------------------------------------------------------------------------
+deploy_user: deploy
+# Public key(s) whose PRIVATE half lives in each tool repo's GH Actions secrets:
+deploy_authorized_keys: []
+#  - "ssh-ed25519 AAAA... earnkit-deploy"
+
+# Git access for cloning private repos at provision time: either make the
+# repos readable by the VM's root ssh key (deploy key per repo) or use https
+# URLs with a token. Operator's choice; document what you did in your private
+# inventory.

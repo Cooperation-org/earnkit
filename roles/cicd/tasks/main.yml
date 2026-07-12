@@ -1,0 +1,41 @@
+---
+# CI/CD plumbing: a restricted `deploy` user that each tool repo's GitHub
+# Actions workflow sshes in as. It may ONLY run the per-tool update scripts
+# (via sudo whitelist) — never a shell escalation.
+- name: deploy user
+  ansible.builtin.user:
+    name: "{{ deploy_user }}"
+    system: false
+    home: "/home/{{ deploy_user }}"
+    shell: /bin/bash
+    create_home: true
+
+- name: authorized keys
+  ansible.posix.authorized_key:
+    user: "{{ deploy_user }}"
+    key: "{{ item }}"
+  loop: "{{ deploy_authorized_keys }}"
+
+- name: update scripts dir
+  ansible.builtin.file:
+    path: /opt/earnkit/bin
+    state: directory
+    mode: "0755"
+
+- name: per-tool update scripts
+  ansible.builtin.template:
+    src: "update-{{ item }}.sh.j2"
+    dest: "/opt/earnkit/bin/update-{{ item }}"
+    mode: "0755"
+  loop:
+    - amebo
+    - govkit
+    - marten
+
+- name: sudoers — deploy may run exactly the update scripts
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/earnkit-deploy
+    mode: "0440"
+    validate: visudo -cf %s
+    content: |
+      {{ deploy_user }} ALL=(root) NOPASSWD: /opt/earnkit/bin/update-amebo, /opt/earnkit/bin/update-govkit, /opt/earnkit/bin/update-marten

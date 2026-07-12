@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# earnkit CI/CD: rebuild marten static from its repo.
+set -euo pipefail
+cd /opt/marten/src
+sudo -u marten git fetch origin
+sudo -u marten git reset --hard "origin/{{ marten_branch }}"
+sudo -u marten npm ci
+sudo -u marten npm run build
+nginx -t && systemctl reload nginx
