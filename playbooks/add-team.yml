@@ -57,7 +57,7 @@
       when: odoo_db.changed
 
     # Register the LinkedTrust OIDC provider in the team DB (idempotent).
-    # VERIFY endpoint paths against {{ oidc_issuer }}/.well-known/openid-configuration;
+    # Endpoints CONFIRMED against the live CRM provider row (2026-07-13):
     # stock auth_oauth uses the implicit flow — IdP client must allow it.
     # Redirect URI per team: https://crm-<slug>.{{ cohort_domain }}/auth_oauth/signin
     - name: "Odoo: LinkedTrust OIDC provider in crm-{{ team_slug }}"
@@ -69,10 +69,10 @@
           vals = {
               'name': 'LinkedTrust',
               'client_id': '{{ odoo_oidc_client_id }}',
-              'auth_endpoint': '{{ oidc_issuer }}/authorize',
-              'validation_endpoint': '{{ oidc_issuer }}/userinfo',
+              'auth_endpoint': '{{ oidc_issuer }}/oauth/authorize',
+              'validation_endpoint': '{{ oidc_issuer }}/oauth/userinfo',
               'data_endpoint': False,
-              'scope': 'openid email profile',
+              'scope': 'openid email trust',
               'enabled': True,
               'body': 'Log in with LinkedTrust',
           }
