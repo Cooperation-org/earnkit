@@ -16,7 +16,7 @@ database_admin_password: "VAULT-ME"
 # Base domain for the cohort services. Default hostname scheme (override per
 # service below if your scheme differs):
 #   taiga.{{ cohort_domain }}, crm-<team>.{{ cohort_domain }}, ...
-cohort_domain: cohort.example.org
+cohort_domain: earnedgov.com   # LOCKED 2026-07-13 (Golda registered it)
 
 # LinkedTrust OIDC provider (the IdP is NOT on this VM).
 oidc_issuer: https://live.linkedtrust.us
@@ -104,7 +104,7 @@ amebo_abra_database_url: ""
 # ---------------------------------------------------------------------------
 govkit_repo: git@github.com:Cooperation-org/govkit.git
 govkit_branch: main
-govkit_domain: "govkit.{{ cohort_domain }}"
+govkit_domain: "dash.{{ cohort_domain }}"   # the invitee-facing name: dash.earnedgov.com
 govkit_db_name: govkit
 govkit_db_user: govkit
 govkit_db_password: "VAULT-ME"
