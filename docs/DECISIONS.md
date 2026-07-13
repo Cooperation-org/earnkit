@@ -30,10 +30,10 @@ Open questions for Golda (from the 7/6 spec, still open):
 - ~~Hostname scheme~~ DECIDED 2026-07-13 (rev 2, Golda + two sessions concur):
   **the member chain lives on workers.vc** — invite doorways at
   workers.vc/i/<code>, dashboard dash.workers.vc, taiga./martin./amebo./
-  crm-<team>.workers.vc (wildcard DNS -> host). Brand roles: cooperation.org =
-  movement umbrella (program info at /earnedgov), workers.vc = the members'
-  product, linkedtrust.us = trust rails (SSO + attestations), earnedgov.com =
-  owned, redirects to the program page. Claims' effort URI stays
+  crm-<team>.workers.vc (wildcard DNS -> host). Brand roles (rev 3): workers.vc = THE ACCELERATOR,
+  whole public surface + member chain (landing, wall, opportunities, invites,
+  dashboard); cooperation.org = movement umbrella; linkedtrust.us = the founding
+  entity's own site + the rails (SSO, attestations); earnedgov.com = redirect. Claims' effort URI stays
   linkedtrust.us/earnedgov (immutable history); wall code already accepts
   multiple effort URIs. Odoo IdP client gains one redirect URI per team at
   add-team time.
