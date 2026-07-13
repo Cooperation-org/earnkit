@@ -16,7 +16,7 @@ database_admin_password: "VAULT-ME"
 # Base domain for the cohort services. Default hostname scheme (override per
 # service below if your scheme differs):
 #   taiga.{{ cohort_domain }}, crm-<team>.{{ cohort_domain }}, ...
-cohort_domain: earnedgov.com   # LOCKED 2026-07-13 (Golda registered it)
+cohort_domain: workers.vc   # LOCKED 2026-07-13: member chain (invites + dashboard) lives on workers.vc
 
 # LinkedTrust OIDC provider (the IdP is NOT on this VM).
 oidc_issuer: https://live.linkedtrust.us

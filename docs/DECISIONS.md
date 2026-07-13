@@ -27,11 +27,16 @@ Origin: Golda's design sessions 2026-07-06 (cohort-VM Ansible spec) and
 Open questions for Golda (from the 7/6 spec, still open):
 - Where the real inventory lives (private repo vs local file).
 - Cohort VM number/name/RAM when she creates it (500+, ~8GB/4c start).
-- ~~Hostname scheme~~ DECIDED 2026-07-13: **earnedgov.com** (Golda registered it;
-  also workers.vc for the funder-facing doorway). Wildcard DNS -> host; services:
-  dash. (GovKit), taiga., martin., amebo., crm-<team>.earnedgov.com; invite
-  doorways at earnedgov.com/i/<code>. Odoo IdP client gains one redirect URI
-  per team at add-team time.
+- ~~Hostname scheme~~ DECIDED 2026-07-13 (rev 2, Golda + two sessions concur):
+  **the member chain lives on workers.vc** — invite doorways at
+  workers.vc/i/<code>, dashboard dash.workers.vc, taiga./martin./amebo./
+  crm-<team>.workers.vc (wildcard DNS -> host). Brand roles: cooperation.org =
+  movement umbrella (program info at /earnedgov), workers.vc = the members'
+  product, linkedtrust.us = trust rails (SSO + attestations), earnedgov.com =
+  owned, redirects to the program page. Claims' effort URI stays
+  linkedtrust.us/earnedgov (immutable history); wall code already accepts
+  multiple effort URIs. Odoo IdP client gains one redirect URI per team at
+  add-team time.
 - Slack app registration per-team vs one app (affects amebo config).
 - Confirm Odoo one-DB-per-team over multi-company (spec leans per-team DB).
 - Taiga OIDC redirect URI: the LinkedTrust plugin ships back-half only; the
