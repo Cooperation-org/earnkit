@@ -71,6 +71,15 @@ odoo_admin_password: "VAULT-ME"           # master password (db management)
 # Team CRM hostname scheme; %d must resolve to the team's database name.
 # Default: crm-<team_slug>.{{ cohort_domain }} with database crm-<team_slug>.
 odoo_dbfilter: "^%d$"
+# Custom CRM addons installed into every team database (each addon is its own
+# repo — earnkit composes, never forks). Two more addons exist on our live CRM
+# but are not yet in git (crm_relationship_dashboard, quick_outreach) — add
+# them here once they have repos.
+odoo_custom_addons:
+  - { name: crm_card_scanner,   repo: "git@github.com:Cooperation-org/crm-card-scanner.git" }
+  - { name: crm_outreach_runner, repo: "git@github.com:Cooperation-org/crm-outreach-runner.git" }
+# Modules initialized in each new team DB (add-team.yml):
+odoo_team_init_modules: "base,crm,auth_oauth,crm_card_scanner,crm_outreach_runner"
 
 # ---------------------------------------------------------------------------
 # amebo (team agent) — from source; multitenant via its instances table

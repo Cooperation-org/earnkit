@@ -51,6 +51,16 @@
   register: odoo_source
   notify: Restart odoo
 
+- name: Clone custom addons (the team CRM features — each its own repo)
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ odoo_custom_addons_dir }}/{{ item.name }}"
+    version: "{{ item.branch | default('main') }}"
+  become: true
+  become_user: "{{ odoo_user }}"
+  loop: "{{ odoo_custom_addons }}"
+  notify: Restart odoo
+
 - name: Ensure setuptools and wheel in the venv (py3.12 venvs ship without setuptools)
   ansible.builtin.pip:
     name:

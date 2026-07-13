@@ -49,7 +49,7 @@
           - -d
           - "crm-{{ team_slug }}"
           - -i
-          - base,crm,auth_oauth
+          - "{{ odoo_team_init_modules | default('base,crm,auth_oauth') }}"
           - --without-demo=all
           - --stop-after-init
           - --no-http
