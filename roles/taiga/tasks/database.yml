@@ -12,8 +12,6 @@
     name: "{{ taiga_db_user }}"
     password: "{{ taiga_db_password }}"
     state: present
-  no_log: true
-
 - name: Create taiga database
   community.postgresql.postgresql_db:
     login_host: "{{ database_host }}"
@@ -24,4 +22,3 @@
     owner: "{{ taiga_db_user }}"
     encoding: UTF-8
     state: present
-  no_log: true

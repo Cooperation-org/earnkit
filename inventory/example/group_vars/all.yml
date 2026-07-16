@@ -9,7 +9,8 @@
 # ---------------------------------------------------------------------------
 database_host: 10.0.0.100            # external Postgres; the VM runs NO database
 database_port: 5432
-# Admin credentials used ONLY to create databases/roles at provision time.
+# Admin credentials used ONLY to create databases/roles at provision time
+# (never deployed to the VM — Ansible uses them locally then discards).
 database_admin_user: postgres
 database_admin_password: "VAULT-ME"
 
@@ -44,8 +45,12 @@ govkit_http_port: 8010
 # ---------------------------------------------------------------------------
 taiga_version: "6.8.1"                    # taiga-back / taiga-front-dist tag
 taiga_domain: "taiga.{{ cohort_domain }}"
-taiga_db_name: taiga
-taiga_db_user: taiga
+# IMPORTANT: The Postgres cluster is shared. Always suffix db/user names with
+# your VM identifier to avoid collisions with other installs. All DB tasks use
+# state: present (create-only, never drop), but reusing an existing name will
+# connect your install to that database's data.
+taiga_db_name: taiga_VMNAME
+taiga_db_user: taiga_VMNAME
 taiga_db_password: "VAULT-ME"
 taiga_secret_key: "VAULT-ME"
 taiga_admin_email: admin@example.org
@@ -65,7 +70,7 @@ marten_domain: "martin.{{ cohort_domain }}"
 # Odoo 17 (CRM) — native source install; ONE DATABASE PER TEAM
 # ---------------------------------------------------------------------------
 odoo_version: "17.0"                      # git branch of odoo/odoo
-odoo_db_user: odoo
+odoo_db_user: odoo_VMNAME
 odoo_db_password: "VAULT-ME"
 odoo_admin_password: "VAULT-ME"           # master password (db management)
 # Team CRM hostname scheme; %d must resolve to the team's database name.
@@ -87,8 +92,8 @@ odoo_team_init_modules: "base,crm,auth_oauth,crm_card_scanner,crm_outreach_runne
 amebo_repo: git@github.com:Cooperation-org/amebo.git
 amebo_branch: main
 amebo_domain: "amebo.{{ cohort_domain }}"
-amebo_db_name: amebo
-amebo_db_user: amebo
+amebo_db_name: amebo_VMNAME
+amebo_db_user: amebo_VMNAME
 amebo_db_password: "VAULT-ME"
 amebo_anthropic_api_key: "VAULT-ME"
 # amebo refuses to boot without these two:
@@ -105,8 +110,8 @@ amebo_abra_database_url: ""
 govkit_repo: git@github.com:Cooperation-org/govkit.git
 govkit_branch: main
 govkit_domain: "dash.{{ cohort_domain }}"   # the invitee-facing name: dash.earnedgov.com
-govkit_db_name: govkit
-govkit_db_user: govkit
+govkit_db_name: govkit_VMNAME
+govkit_db_user: govkit_VMNAME
 govkit_db_password: "VAULT-ME"
 govkit_secret_key: "VAULT-ME"
 # Fernet key for task-source API tokens (distinct from Django SECRET_KEY);
