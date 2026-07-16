@@ -73,11 +73,24 @@
 
 # ---- Django migrate + collectstatic (idempotent by nature; changed_when
 # keys off their output so re-runs report ok, not changed)
+#
+# manage.py MUST run with DATABASE_URL in the OS environment. settings.py reads
+# most values with python-decouple (which finds the rendered .env in chdir), but
+# the database comes from dj_database_url.config(), which reads os.environ
+# ONLY — it does NOT consult .env. Without it, migrate silently falls back to
+# the sqlite default (sqlite:///db.sqlite3) and applies every migration to a
+# throwaway file, while the systemd unit (EnvironmentFile=.env) talks to the
+# real Postgres — leaving that database empty and the site 500ing on first
+# query. So we inject DATABASE_URL (and SECRET_KEY, to avoid the insecure
+# dev default) explicitly here. Same fix belongs on any sibling Django role.
 - name: workersvc migrate
   ansible.builtin.command: "{{ workersvc_venv_dir }}/bin/python manage.py migrate --noinput"
   args:
     chdir: "{{ workersvc_src_dir }}"
   become_user: "{{ workersvc_user }}"
+  environment:
+    DATABASE_URL: "{{ workersvc_database_url }}"
+    SECRET_KEY: "{{ workersvc_secret_key }}"
   register: workersvc_migrate
   changed_when: "'Applying' in workersvc_migrate.stdout"
   notify: restart workersvc
@@ -87,6 +100,9 @@
   args:
     chdir: "{{ workersvc_src_dir }}"
   become_user: "{{ workersvc_user }}"
+  environment:
+    DATABASE_URL: "{{ workersvc_database_url }}"
+    SECRET_KEY: "{{ workersvc_secret_key }}"
   register: workersvc_static
   changed_when: "'0 static files copied' not in workersvc_static.stdout"
   notify: restart workersvc
