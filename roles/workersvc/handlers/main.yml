@@ -1,0 +1,16 @@
+---
+- name: restart workersvc
+  ansible.builtin.systemd:
+    name: workersvc
+    state: restarted
+    daemon_reload: true
+
+# Guarded: on a fresh VM the nginx role (which installs nginx and includes
+# /etc/nginx/earnkit/*.conf) runs after this role, so nginx may not be active
+# yet — it will pick the fragment up when it first starts. On re-runs, a
+# changed fragment reloads the running nginx.
+- name: Reload nginx
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+  when: workersvc_nginx_active.rc | default(1) == 0

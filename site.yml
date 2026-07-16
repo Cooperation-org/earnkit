@@ -13,5 +13,6 @@
     - { role: odoo,     tags: [odoo] }
     - { role: amebo,    tags: [amebo] }
     - { role: govkit,   tags: [govkit] }
+    - { role: workersvc, tags: [workersvc] }
     - { role: nginx,    tags: [nginx] }
     - { role: cicd,     tags: [cicd] }

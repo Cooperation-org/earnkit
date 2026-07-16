@@ -1,7 +1,7 @@
-# Drop this into a TOOL repo (amebo, govkit, marten) as
+# Drop this into a TOOL repo (amebo, govkit, marten, workersvc) as
 # .github/workflows/deploy-to-cohort.yml — then set repo secrets:
 #   COHORT_SSH_HOST, COHORT_SSH_KEY (private half of an earnkit deploy key)
-# Change TOOL to the repo's tool name: amebo | govkit | marten
+# Change TOOL to the repo's tool name: amebo | govkit | marten | workersvc
 name: Deploy to cohort VM
 
 on:

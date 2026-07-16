@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# earnkit CI/CD: update workersvc from its repo, migrate, collectstatic, restart.
+set -euo pipefail
+cd /opt/workersvc/src
+sudo -u workersvc git fetch origin
+sudo -u workersvc git reset --hard "origin/{{ workersvc_branch }}"
+sudo -u workersvc /opt/workersvc/venv/bin/pip install -q -r requirements.txt
+sudo -u workersvc /opt/workersvc/venv/bin/python manage.py migrate --noinput
+sudo -u workersvc /opt/workersvc/venv/bin/python manage.py collectstatic --noinput
+systemctl restart workersvc
+systemctl is-active workersvc

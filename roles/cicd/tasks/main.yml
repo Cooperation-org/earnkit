@@ -31,6 +31,7 @@
     - amebo
     - govkit
     - marten
+    - workersvc
 
 - name: sudoers — deploy may run exactly the update scripts
   ansible.builtin.copy:
@@ -38,4 +39,4 @@
     mode: "0440"
     validate: visudo -cf %s
     content: |
-      {{ deploy_user }} ALL=(root) NOPASSWD: /opt/earnkit/bin/update-amebo, /opt/earnkit/bin/update-govkit, /opt/earnkit/bin/update-marten
+      {{ deploy_user }} ALL=(root) NOPASSWD: /opt/earnkit/bin/update-amebo, /opt/earnkit/bin/update-govkit, /opt/earnkit/bin/update-marten, /opt/earnkit/bin/update-workersvc

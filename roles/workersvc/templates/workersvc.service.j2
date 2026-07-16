@@ -1,0 +1,27 @@
+# Managed by earnkit (roles/workersvc) — edits are overwritten on the next run.
+[Unit]
+Description=workersvc (Django + gunicorn) — Workers.vc public face
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ workersvc_user }}
+Group={{ workersvc_user }}
+WorkingDirectory={{ workersvc_src_dir }}
+EnvironmentFile={{ workersvc_env_file }}
+Environment=PYTHONUNBUFFERED=1
+ExecStart={{ workersvc_venv_dir }}/bin/gunicorn workersvc.wsgi:application \
+  --bind {{ workersvc_bind }}:{{ workersvc_http_port }} \
+  --workers {{ workersvc_gunicorn_workers }} \
+  --timeout {{ workersvc_gunicorn_timeout }} \
+  --access-logfile - \
+  --error-logfile -
+Restart=on-failure
+RestartSec=5
+MemoryMax={{ workersvc_memory_max }}
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

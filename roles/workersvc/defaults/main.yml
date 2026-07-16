@@ -1,0 +1,35 @@
+---
+# roles/workersvc — role defaults (tuning knobs; all safe to leave as-is).
+#
+# The SITE contract comes from group_vars (see inventory/example/group_vars/all.yml):
+#   database_host, database_port, database_admin_user, database_admin_password,
+#   workersvc_repo, workersvc_branch, workersvc_domain, workersvc_db_name,
+#   workersvc_db_user, workersvc_db_password, workersvc_secret_key,
+#   workersvc_http_port, workersvc_govkit_org_slug, workersvc_dashboard_url,
+#   govkit_http_port, govkit_s2s_token, lt_api
+# This role uses exactly those names and defines nothing that shadows them.
+
+# --- filesystem layout (cicd/update-workersvc assumes these) -------------------
+workersvc_user: workersvc
+workersvc_home: /opt/workersvc
+workersvc_src_dir: "{{ workersvc_home }}/src"      # the git checkout
+workersvc_venv_dir: "{{ workersvc_home }}/venv"
+# Kept at the checkout root so systemd EnvironmentFile= and the app's own
+# .env loading both find it (same placement as govkit).
+workersvc_env_file: "{{ workersvc_src_dir }}/.env"
+
+# --- network -------------------------------------------------------------------
+# Unlike govkit, the apex hostname arrives on THIS VM's port 80 (the site
+# reverse proxy forwards it) — the local nginx server block owns :80 and
+# proxies to gunicorn, so gunicorn stays on loopback.
+workersvc_bind: "127.0.0.1"
+# Doorway commit page accepts photo/video uploads.
+workersvc_max_upload_size: 50m
+
+# --- gunicorn / systemd tuning ---------------------------------------------------
+workersvc_gunicorn_workers: 3
+workersvc_gunicorn_timeout: 30
+workersvc_memory_max: 512M
+
+# --- derived (do not override) ----------------------------------------------------
+workersvc_database_url: "postgres://{{ workersvc_db_user }}:{{ workersvc_db_password | urlencode }}@{{ database_host }}:{{ database_port }}/{{ workersvc_db_name }}"

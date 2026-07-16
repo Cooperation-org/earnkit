@@ -1,0 +1,132 @@
+---
+# workersvc — the Workers.vc public face (Django + gunicorn, whitenoise for
+# static): VC landing, accelerator pages, the invite doorway (/i/<code>).
+# Native systemd, no Docker; database on {{ database_host }}.
+# Unlike the other services, its hostname is the APEX ({{ workersvc_domain }})
+# — the site reverse proxy sends it to this VM's port 80, where a local nginx
+# server block (dropped into /etc/nginx/earnkit/) proxies to gunicorn on
+# loopback.
+
+- name: workersvc apt packages (base role covers git/venv/build/psql-client)
+  ansible.builtin.apt:
+    name:
+      - python3-psycopg2   # for the community.postgresql tasks below (NOT the app venv)
+    state: present
+
+- name: workersvc system user
+  ansible.builtin.user:
+    name: "{{ workersvc_user }}"
+    system: true
+    home: "{{ workersvc_home }}"
+    shell: /usr/sbin/nologin
+    create_home: true
+
+- name: Clone workersvc
+  ansible.builtin.git:
+    repo: "{{ workersvc_repo }}"
+    dest: "{{ workersvc_src_dir }}"
+    version: "{{ workersvc_branch }}"
+    force: false
+  become_user: "{{ workersvc_user }}"
+  notify: restart workersvc
+
+- name: venv + requirements (pinned by the repo's requirements.txt)
+  ansible.builtin.pip:
+    requirements: "{{ workersvc_src_dir }}/requirements.txt"
+    virtualenv: "{{ workersvc_venv_dir }}"
+    virtualenv_command: python3 -m venv
+  become_user: "{{ workersvc_user }}"
+  notify: restart workersvc
+
+# ---- database on {{ database_host }} (admin creds create; app uses its own role)
+- name: "Postgres role {{ workersvc_db_user }}"
+  community.postgresql.postgresql_user:
+    login_host: "{{ database_host }}"
+    login_port: "{{ database_port }}"
+    login_user: "{{ database_admin_user }}"
+    login_password: "{{ database_admin_password }}"
+    name: "{{ workersvc_db_user }}"
+    password: "{{ workersvc_db_password }}"
+    state: present
+  no_log: true
+
+- name: "Postgres database {{ workersvc_db_name }}"
+  community.postgresql.postgresql_db:
+    login_host: "{{ database_host }}"
+    login_port: "{{ database_port }}"
+    login_user: "{{ database_admin_user }}"
+    login_password: "{{ database_admin_password }}"
+    name: "{{ workersvc_db_name }}"
+    owner: "{{ workersvc_db_user }}"
+    state: present
+  no_log: true
+
+# ---- app config (.env is read by the app at the checkout root AND by
+# systemd EnvironmentFile — manage.py below needs it in place first)
+- name: workersvc .env
+  ansible.builtin.template:
+    src: workersvc.env.j2
+    dest: "{{ workersvc_env_file }}"
+    owner: "{{ workersvc_user }}"
+    group: "{{ workersvc_user }}"
+    mode: "0600"
+  notify: restart workersvc
+
+# ---- Django migrate + collectstatic (idempotent by nature; changed_when
+# keys off their output so re-runs report ok, not changed)
+- name: workersvc migrate
+  ansible.builtin.command: "{{ workersvc_venv_dir }}/bin/python manage.py migrate --noinput"
+  args:
+    chdir: "{{ workersvc_src_dir }}"
+  become_user: "{{ workersvc_user }}"
+  register: workersvc_migrate
+  changed_when: "'Applying' in workersvc_migrate.stdout"
+  notify: restart workersvc
+
+- name: workersvc collectstatic (whitenoise manifest storage)
+  ansible.builtin.command: "{{ workersvc_venv_dir }}/bin/python manage.py collectstatic --noinput"
+  args:
+    chdir: "{{ workersvc_src_dir }}"
+  become_user: "{{ workersvc_user }}"
+  register: workersvc_static
+  changed_when: "'0 static files copied' not in workersvc_static.stdout"
+  notify: restart workersvc
+
+# ---- systemd (unit is named `workersvc` — cicd/update-workersvc restarts it)
+- name: workersvc unit
+  ansible.builtin.template:
+    src: workersvc.service.j2
+    dest: /etc/systemd/system/workersvc.service
+    mode: "0644"
+  register: workersvc_unit
+  notify: restart workersvc
+
+- name: workersvc enabled + started
+  ansible.builtin.systemd:
+    name: workersvc
+    enabled: true
+    state: started
+    daemon_reload: "{{ workersvc_unit.changed }}"
+
+# ---- nginx server block (apex hostname on :80 → gunicorn) ---------------------
+# Same fragment pattern as taiga: the nginx role installs nginx itself and
+# includes /etc/nginx/earnkit/*.conf; site.yml runs it AFTER this role, so on
+# a fresh VM nginx may not exist yet — the reload handler is guarded.
+- name: Ensure /etc/nginx/earnkit exists
+  ansible.builtin.file:
+    path: /etc/nginx/earnkit
+    state: directory
+    mode: "0755"
+
+- name: Render workersvc nginx server block
+  ansible.builtin.template:
+    src: nginx-workersvc.conf.j2
+    dest: /etc/nginx/earnkit/workersvc.conf
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Check whether nginx is active
+  ansible.builtin.command: systemctl is-active --quiet nginx
+  register: workersvc_nginx_active
+  changed_when: false
+  failed_when: false

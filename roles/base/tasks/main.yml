@@ -57,6 +57,7 @@
     - "{{ odoo_http_port }}"
     - "{{ amebo_api_port }}"
     - "{{ govkit_http_port }}"
+    - "80"                       # workersvc apex — nginx on :80 (gunicorn stays on loopback)
 
 - name: UFW enabled
   community.general.ufw:

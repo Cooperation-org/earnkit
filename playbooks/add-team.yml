@@ -4,7 +4,8 @@
 #   ansible-playbook -i <inventory> playbooks/add-team.yml \
 #     -e team_slug=sunrise -e team_name="Sunrise Co-op"
 #
-# Creates: Odoo database, Taiga private project, amebo instance row, GovKit org.
+# Creates: Odoo database, Taiga private project, amebo instance row + registry
+# org (amebo is the team registry), GovKit org.
 # NEVER provisions individual people — that is amebo's job (see docs/DECISIONS.md #6).
 - name: Add a cohort team
   hosts: cohort
@@ -116,6 +117,24 @@
         named_args:
           name: "{{ team_name }}"
           slug: "{{ team_slug }}"
+
+    # ---- amebo: register the org in the team registry ----------------------
+    # amebo is the team registry — the operational system-of-record for orgs,
+    # members, and per-tool accounts (docs/TEAM_PROVISIONING.md in the amebo
+    # repo). The S2S endpoint upserts the org row; idempotent on slug.
+    - name: "amebo: provision org {{ team_slug }} in the team registry"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ amebo_api_port }}/api/orgs/provision"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ amebo_s2s_token }}"
+        body_format: json
+        body:
+          slug: "{{ team_slug }}"
+          name: "{{ team_name }}"
+          source: "add-team"
+          members: []
+        status_code: 200
 
     # ---- GovKit: one org per team ------------------------------------------
     - name: "GovKit: org {{ team_slug }}"

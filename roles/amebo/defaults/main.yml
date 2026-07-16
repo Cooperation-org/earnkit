@@ -4,7 +4,7 @@
 # The SITE contract comes from group_vars (see inventory/example/group_vars/all.yml):
 #   database_host, database_port, database_admin_user, database_admin_password,
 #   amebo_repo, amebo_branch, amebo_db_name, amebo_db_user, amebo_db_password,
-#   amebo_api_port, amebo_anthropic_api_key,
+#   amebo_api_port, amebo_anthropic_api_key, amebo_s2s_token,
 #   amebo_slack_bot_token, amebo_slack_app_token, amebo_abra_database_url
 # plus TWO new required site vars (the app refuses to start without them):
 #   amebo_jwt_secret_key   — signs API auth tokens (JWT_SECRET_KEY)

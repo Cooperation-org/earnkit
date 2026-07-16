@@ -13,6 +13,7 @@ them together:
 | **Marten** | `Cooperation-org/marten` | modern frontend for Taiga |
 | **Odoo 17** | upstream (source install) | CRM |
 | **amebo** | `Cooperation-org/amebo` | the team's knowledge-cooperation agent |
+| **workersvc** | `Cooperation-org/workers.vc` | Workers.vc public face: VC landing, accelerator pages, invite doorway |
 
 Design rules (settled — see `docs/DECISIONS.md`):
 
@@ -70,7 +71,7 @@ service's port is a variable — see `inventory/example/group_vars/all.yml`).
 ## Layout
 
 ```
-site.yml                  # the full-stack playbook (tags: base,rabbitmq,taiga,marten,odoo,amebo,govkit,cicd,nginx)
+site.yml                  # the full-stack playbook (tags: base,rabbitmq,taiga,marten,odoo,amebo,govkit,workersvc,cicd,nginx)
 playbooks/add-team.yml    # per-team provisioning (team-level resources ONLY, never individual users)
 roles/                    # one role per concern; no app code
 inventory/example/        # documented sample inventory — copy it out, never commit real values

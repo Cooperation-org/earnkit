@@ -5,7 +5,8 @@
 #   database_host, database_port, database_admin_user, database_admin_password,
 #   govkit_repo, govkit_branch, govkit_domain, govkit_db_name, govkit_db_user,
 #   govkit_db_password, govkit_secret_key, govkit_http_port,
-#   oidc_issuer, govkit_oidc_client_id, govkit_oidc_client_secret
+#   oidc_issuer, govkit_oidc_client_id, govkit_oidc_client_secret,
+#   govkit_s2s_token, amebo_api_port, amebo_s2s_token
 # plus ONE new site var (add to your inventory):
 #   govkit_fernet_key — Fernet key encrypting task-source API tokens at rest
 #     (the app's GOVKIT_SECRET_KEY, distinct from Django's SECRET_KEY).

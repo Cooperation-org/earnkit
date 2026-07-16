@@ -39,6 +39,7 @@ marten_http_port: 8081       # nginx: marten static build
 odoo_http_port: 8069
 amebo_api_port: 8000
 govkit_http_port: 8010
+workersvc_http_port: 8015    # gunicorn on loopback; local nginx serves the apex on :80
 
 # ---------------------------------------------------------------------------
 # Taiga (task tracker) — native install, versions pinned
@@ -103,6 +104,10 @@ amebo_encryption_key: "VAULT-ME"     # same generator; Fernet key for stored cre
 amebo_slack_bot_token: ""
 amebo_slack_app_token: ""
 amebo_abra_database_url: ""
+# Static bearer token for amebo's S2S provisioning API (/api/orgs/provision —
+# amebo is the team registry, see docs/TEAM_PROVISIONING.md in the amebo repo).
+# The same value goes into the amebo AND govkit envs:
+amebo_s2s_token: "VAULT-ME"
 
 # ---------------------------------------------------------------------------
 # GovKit (earned governance) — from source
@@ -117,6 +122,28 @@ govkit_secret_key: "VAULT-ME"
 # Fernet key for task-source API tokens (distinct from Django SECRET_KEY);
 # needed once a team connects a Taiga source:
 govkit_fernet_key: "VAULT-ME"        # python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Shared secret for GovKit's doorway S2S API (invite resolve/committed).
+# The same value goes into the govkit AND workersvc envs; empty disables the
+# endpoints (every call 401s):
+govkit_s2s_token: "VAULT-ME"
+
+# ---------------------------------------------------------------------------
+# workersvc (Workers.vc public face) — from source
+# ---------------------------------------------------------------------------
+workersvc_repo: git@github.com:Cooperation-org/workers.vc.git
+workersvc_branch: main
+workersvc_domain: "{{ cohort_domain }}"     # the apex — workers.vc itself (+ www)
+workersvc_db_name: workersvc_VMNAME
+workersvc_db_user: workersvc_VMNAME
+workersvc_db_password: "VAULT-ME"
+workersvc_secret_key: "VAULT-ME"
+# GovKit org whose invites the doorway resolves:
+workersvc_govkit_org_slug: earnedgov
+# Where "go to your dashboard" points after joining:
+workersvc_dashboard_url: "https://dash.{{ cohort_domain }}"
+# LinkedTrust claims backend the doorway posts signed claims to (same host as
+# oidc_issuer today, but a distinct role — keep them separate vars):
+lt_api: https://live.linkedtrust.us
 
 # ---------------------------------------------------------------------------
 # CI/CD — restricted deploy user the GitHub Actions workflows ssh in as
