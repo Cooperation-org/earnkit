@@ -5,7 +5,10 @@ cd /opt/govkit/src
 sudo -u govkit git fetch origin
 sudo -u govkit git reset --hard "origin/{{ govkit_branch }}"
 sudo -u govkit /opt/govkit/venv/bin/pip install -q -r requirements.txt
-sudo -u govkit /opt/govkit/venv/bin/python manage.py migrate --noinput
-sudo -u govkit /opt/govkit/venv/bin/python manage.py collectstatic --noinput
+# govkit reads .env directly (django-environ), so this is defensive/uniform with
+# workersvc rather than a live bug fix: source .env inside the sudo'd shell so
+# manage.py always sees the same DB config the service uses.
+sudo -u govkit bash -c 'set -a; . /opt/govkit/src/.env; set +a; cd /opt/govkit/src && exec /opt/govkit/venv/bin/python manage.py migrate --noinput'
+sudo -u govkit bash -c 'set -a; . /opt/govkit/src/.env; set +a; cd /opt/govkit/src && exec /opt/govkit/venv/bin/python manage.py collectstatic --noinput'
 systemctl restart govkit
 systemctl is-active govkit

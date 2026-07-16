@@ -5,7 +5,11 @@ cd /opt/workersvc/src
 sudo -u workersvc git fetch origin
 sudo -u workersvc git reset --hard "origin/{{ workersvc_branch }}"
 sudo -u workersvc /opt/workersvc/venv/bin/pip install -q -r requirements.txt
-sudo -u workersvc /opt/workersvc/venv/bin/python manage.py migrate --noinput
-sudo -u workersvc /opt/workersvc/venv/bin/python manage.py collectstatic --noinput
+# manage.py needs DATABASE_URL in its OS environment: settings.py reads the DB via
+# dj_database_url.config(), which consults os.environ ONLY (not .env). sudo
+# sanitizes the environment, so source .env INSIDE the sudo'd shell — otherwise
+# migrate silently falls back to the sqlite default and never touches Postgres.
+sudo -u workersvc bash -c 'set -a; . /opt/workersvc/src/.env; set +a; cd /opt/workersvc/src && exec /opt/workersvc/venv/bin/python manage.py migrate --noinput'
+sudo -u workersvc bash -c 'set -a; . /opt/workersvc/src/.env; set +a; cd /opt/workersvc/src && exec /opt/workersvc/venv/bin/python manage.py collectstatic --noinput'
 systemctl restart workersvc
 systemctl is-active workersvc
