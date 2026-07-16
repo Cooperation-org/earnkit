@@ -45,10 +45,10 @@
     login_port: "{{ database_port }}"
     login_user: "{{ database_admin_user }}"
     login_password: "{{ database_admin_password }}"
+    login_db: postgres
     name: "{{ workersvc_db_user }}"
     password: "{{ workersvc_db_password }}"
     state: present
-  no_log: true
 
 - name: "Postgres database {{ workersvc_db_name }}"
   community.postgresql.postgresql_db:
@@ -59,7 +59,6 @@
     name: "{{ workersvc_db_name }}"
     owner: "{{ workersvc_db_user }}"
     state: present
-  no_log: true
 
 # ---- app config (.env is read by the app at the checkout root AND by
 # systemd EnvironmentFile — manage.py below needs it in place first)
