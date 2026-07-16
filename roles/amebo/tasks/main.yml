@@ -54,10 +54,10 @@
     login_port: "{{ database_port }}"
     login_user: "{{ database_admin_user }}"
     login_password: "{{ database_admin_password }}"
+    login_db: postgres
     name: "{{ amebo_db_user }}"
     password: "{{ amebo_db_password }}"
     state: present
-  no_log: true
 
 - name: "Postgres database {{ amebo_db_name }}"
   community.postgresql.postgresql_db:
@@ -68,7 +68,6 @@
     name: "{{ amebo_db_name }}"
     owner: "{{ amebo_db_user }}"
     state: present
-  no_log: true
 
 # schema.sql does CREATE EXTENSION IF NOT EXISTS vector, but it runs as the
 # unprivileged DB owner — creating an untrusted extension needs superuser, so
@@ -82,7 +81,6 @@
     db: "{{ amebo_db_name }}"
     name: vector
     state: present
-  no_log: true
 
 # ---- app config (.env is read by systemd EnvironmentFile AND python-dotenv,
 # and the migration runner takes DATABASE_URL from it — so template it first)
@@ -124,6 +122,13 @@
     mode: "0644"
   register: amebo_unit
   notify: restart amebo-backend
+
+- name: amebo nginx conf
+  ansible.builtin.template:
+    src: nginx-amebo.conf.j2
+    dest: /etc/nginx/earnkit/amebo.conf
+    mode: "0644"
+  notify: reload nginx
 
 - name: amebo-backend enabled + started
   ansible.builtin.systemd:

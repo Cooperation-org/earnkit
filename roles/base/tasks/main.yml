@@ -41,22 +41,47 @@
     line: 'Storage=persistent'
   notify: restart journald
 
+# --- GitHub SSH access (all service users clone private repos + CI/CD fetches)
+- name: GitHub SSH host key (system-wide)
+  ansible.builtin.known_hosts:
+    name: github.com
+    key: "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
+    path: /etc/ssh/ssh_known_hosts
+    state: present
+
+- name: earnkit config dir
+  ansible.builtin.file:
+    path: /etc/earnkit
+    state: directory
+    mode: "0755"
+
+- name: GitHub deploy key (shared by all service users)
+  ansible.builtin.copy:
+    content: "{{ github_ssh_private_key }}"
+    dest: /etc/earnkit/github-deploy-key
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: SSH config — use deploy key for github.com
+  ansible.builtin.copy:
+    dest: /etc/ssh/ssh_config.d/earnkit-github.conf
+    mode: "0644"
+    content: |
+      Host github.com
+        IdentityFile /etc/earnkit/github-deploy-key
+        IdentitiesOnly yes
+
 - name: UFW allow ssh
   community.general.ufw:
     rule: allow
     name: OpenSSH
 
-- name: UFW allow service ports
+- name: UFW allow HTTP (nginx serves all services on port 80)
   community.general.ufw:
     rule: allow
-    port: "{{ item }}"
+    port: "80"
     proto: tcp
-  loop:
-    - "{{ taiga_http_port }}"
-    - "{{ marten_http_port }}"
-    - "{{ odoo_http_port }}"
-    - "{{ amebo_api_port }}"
-    - "{{ govkit_http_port }}"
 
 - name: UFW enabled
   community.general.ufw:

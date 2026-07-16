@@ -19,6 +19,11 @@ database_admin_password: "VAULT-ME"
 #   taiga.{{ cohort_domain }}, crm-<team>.{{ cohort_domain }}, ...
 cohort_domain: workers.vc   # LOCKED 2026-07-13: member chain (invites + dashboard) lives on workers.vc
 
+# SSH private key for the VM to clone repos from GitHub (service users + CI/CD).
+# Generate: ssh-keygen -t ed25519 -f earnkit-vm -N "" -C "earnkit-vm"
+# Add the .pub to GitHub (account SSH key or per-repo deploy key).
+github_ssh_private_key: "VAULT-ME"
+
 # LinkedTrust OIDC provider (the IdP is NOT on this VM).
 oidc_issuer: https://live.linkedtrust.us
 # One client per service, registered on the IdP by the operator:
@@ -82,7 +87,7 @@ odoo_dbfilter: "^%d$"
 # them here once they have repos.
 odoo_custom_addons:
   - { name: crm_card_scanner,   repo: "git@github.com:Cooperation-org/crm-card-scanner.git" }
-  - { name: crm_outreach_runner, repo: "git@github.com:Cooperation-org/crm-outreach-runner.git" }
+  - { name: crm_outreach_runner, repo: "git@github.com:Cooperation-org/crm-outreach-runner.git", branch: master }
 # Modules initialized in each new team DB (add-team.yml):
 odoo_team_init_modules: "base,crm,auth_oauth,crm_card_scanner,crm_outreach_runner"
 

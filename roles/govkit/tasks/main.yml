@@ -42,10 +42,10 @@
     login_port: "{{ database_port }}"
     login_user: "{{ database_admin_user }}"
     login_password: "{{ database_admin_password }}"
+    login_db: postgres
     name: "{{ govkit_db_user }}"
     password: "{{ govkit_db_password }}"
     state: present
-  no_log: true
 
 - name: "Postgres database {{ govkit_db_name }}"
   community.postgresql.postgresql_db:
@@ -56,7 +56,6 @@
     name: "{{ govkit_db_name }}"
     owner: "{{ govkit_db_user }}"
     state: present
-  no_log: true
 
 # ---- app config (.env is read by django-environ at BASE_DIR/.env AND by
 # systemd EnvironmentFile — manage.py below needs it in place first)
@@ -97,6 +96,13 @@
     mode: "0644"
   register: govkit_unit
   notify: restart govkit
+
+- name: govkit nginx conf
+  ansible.builtin.template:
+    src: nginx-govkit.conf.j2
+    dest: /etc/nginx/earnkit/govkit.conf
+    mode: "0644"
+  notify: reload nginx
 
 - name: govkit enabled + started
   ansible.builtin.systemd:

@@ -125,7 +125,6 @@
     name: "{{ odoo_db_user }}"
     password: "{{ odoo_db_password }}"
     role_attr_flags: LOGIN,CREATEDB
-  no_log: true
 
 # --- config & service ----------------------------------------------------------------
 
@@ -146,6 +145,13 @@
     group: root
     mode: "0644"
   notify: Restart odoo
+
+- name: odoo nginx conf
+  ansible.builtin.template:
+    src: nginx-odoo.conf.j2
+    dest: /etc/nginx/earnkit/odoo.conf
+    mode: "0644"
+  notify: reload nginx
 
 - name: Enable and start odoo
   ansible.builtin.systemd_service:
