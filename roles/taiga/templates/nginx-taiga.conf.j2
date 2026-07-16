@@ -5,8 +5,8 @@
 # and the hardcoded X-Forwarded-Proto.
 
 server {
-    listen {{ taiga_http_port }};
-    listen [::]:{{ taiga_http_port }};
+    listen 80;
+    listen [::]:80;
     server_name {{ taiga_domain }};
 
     client_max_body_size {{ taiga_max_upload_size }};

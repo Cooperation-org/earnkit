@@ -19,9 +19,8 @@ data_dir = {{ odoo_data_dir }}
 addons_path = {{ odoo_source_dir }}/addons,{{ odoo_custom_addons_dir }}
 
 ; ---- http ----
-; bind all interfaces: TLS + routing happen on the external reverse proxy,
-; which forwards to this VM's IP (not localhost).
-http_interface = 0.0.0.0
+; localhost only: the VM's nginx proxies from port 80.
+http_interface = 127.0.0.1
 http_port = {{ odoo_http_port }}
 gevent_port = {{ odoo_gevent_port }}
 proxy_mode = True

@@ -22,10 +22,8 @@ govkit_venv_dir: "{{ govkit_home }}/venv"
 govkit_env_file: "{{ govkit_src_dir }}/.env"
 
 # --- network -------------------------------------------------------------------
-# whitenoise serves static from inside gunicorn and the site reverse proxy
-# (Caddy on the Proxmox host) is OFF this VM → bind all interfaces, no local
-# nginx needed; ufw (base role) limits exposure.
-govkit_bind: "0.0.0.0"
+# localhost only: the VM's nginx proxies from port 80.
+govkit_bind: "127.0.0.1"
 
 # --- gunicorn / systemd tuning ---------------------------------------------------
 govkit_gunicorn_workers: 3

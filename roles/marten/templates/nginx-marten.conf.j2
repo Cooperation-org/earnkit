@@ -1,7 +1,7 @@
 # earnkit: marten static build
 server {
-    listen {{ marten_http_port }};
-    server_name {{ marten_domain }} _;
+    listen 80;
+    server_name {{ marten_domain }};
     root /opt/marten/src/build;
     index index.html;
     location / {

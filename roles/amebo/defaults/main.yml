@@ -20,9 +20,8 @@ amebo_venv_dir: "{{ amebo_home }}/venv"      # cicd update script pins this path
 amebo_env_file: "{{ amebo_backend_dir }}/.env"  # read by systemd AND python-dotenv (cwd)
 
 # --- network -------------------------------------------------------------------
-# The site reverse proxy (Caddy on the Proxmox host) is OFF this VM, so the
-# API must listen on all interfaces; ufw (base role) limits exposure.
-amebo_api_host: "0.0.0.0"
+# localhost only: the VM's nginx proxies from port 80.
+amebo_api_host: "127.0.0.1"
 
 # --- Slack transport (only rendered when slack tokens are configured) ----------
 # false = Socket Mode (needs amebo_slack_app_token); true = HTTP Events API.
