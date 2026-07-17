@@ -152,3 +152,16 @@
       become_user: govkit
       register: govkit_org
       changed_when: "'created' in govkit_org.stdout"
+
+    # ---- Caddy: register CRM subdomain on the Proxmox host ------------------
+    - name: "Caddy: route crm-{{ team_slug }}.{{ cohort_domain }}"
+      ansible.builtin.uri:
+        url: "http://{{ caddy_api_host }}:{{ caddy_api_port }}/add-crm-route"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ caddy_api_token }}"
+        body_format: json
+        body:
+          slug: "{{ team_slug }}"
+        status_code: [200, 201]
+      when: caddy_api_token | default('') | length > 0
