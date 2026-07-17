@@ -28,7 +28,7 @@ workersvc_max_upload_size: 50m
 
 # --- gunicorn / systemd tuning ---------------------------------------------------
 workersvc_gunicorn_workers: 3
-workersvc_gunicorn_timeout: 30
+workersvc_gunicorn_timeout: 120
 workersvc_memory_max: 512M
 
 # --- derived (do not override) ----------------------------------------------------
