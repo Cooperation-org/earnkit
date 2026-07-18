@@ -9,6 +9,17 @@
     shell: /usr/sbin/nologin
     create_home: true
 
+# The user module creates /opt/marten as 0750, which nginx (www-data) cannot
+# traverse to reach the static build under src/build — every request 500s on a
+# stat() denial. 0751 grants traverse only; the home stays unlistable.
+- name: marten home traversable by nginx
+  ansible.builtin.file:
+    path: /opt/marten
+    state: directory
+    owner: marten
+    group: marten
+    mode: "0751"
+
 - name: Clone marten
   ansible.builtin.git:
     repo: "{{ marten_repo }}"

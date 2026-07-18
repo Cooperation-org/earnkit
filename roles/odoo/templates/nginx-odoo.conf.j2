@@ -1,7 +1,7 @@
 # {{ ansible_managed }}
 server {
     listen 80;
-    server_name ~^crm-(.+)\.{{ cohort_domain | regex_escape }}$;
+    server_name crm.{{ cohort_domain }} ~^crm-(.+)\.{{ cohort_domain | regex_escape }}$;
 
     client_max_body_size 64m;
 
