@@ -1,0 +1,48 @@
+---
+# Upgrade the custom CRM addons ({{ odoo_upgrade_modules }}) in EVERY team
+# database. Entry point: playbooks/upgrade-crm-addons.yml (or
+# include_role: odoo with tasks_from: upgrade-addons).
+#
+# Source of truth for the team list is the databases themselves: every team
+# database matches crm-<team_slug>_vc (created by playbooks/add-team.yml;
+# dbfilter in odoo.conf is ^%d_vc$) — discovered at runtime, never a
+# hardcoded list. The base crm_vc database (the crm.<domain> vhost) is NOT a
+# team database and is deliberately not matched — extend the pattern only if
+# that decision changes. Safe to re-run: odoo-bin -u reloads each module's data
+# against its current source and converges; running Odoo workers pick up the
+# new registry via the base_registry_signaling sequence, so no restart is
+# needed.
+
+- name: Discover team CRM databases on {{ database_host }}
+  community.postgresql.postgresql_query:
+    login_host: "{{ database_host }}"
+    login_port: "{{ database_port }}"
+    login_user: "{{ odoo_db_user }}"
+    login_password: "{{ odoo_db_password }}"
+    db: postgres
+    query: >
+      SELECT datname FROM pg_database
+      WHERE datname ~ '^crm-[a-z0-9-]+_vc$'
+      ORDER BY datname
+  register: odoo_team_dbs
+  changed_when: false
+
+- name: "Upgrade addons ({{ odoo_upgrade_modules }}) in each team database"
+  ansible.builtin.command:
+    argv:
+      - "{{ odoo_venv_dir }}/bin/python"
+      - "{{ odoo_source_dir }}/odoo-bin"
+      - -c
+      - "{{ odoo_conf_dir }}/odoo.conf"
+      - -d
+      - "{{ item }}"
+      - -u
+      - "{{ odoo_upgrade_modules }}"
+      - --stop-after-init
+      - --no-http
+  become: true
+  become_user: "{{ odoo_user }}"
+  loop: "{{ odoo_team_dbs.query_result | map(attribute='datname') | list }}"
+  # odoo-bin -u always reloads the modules' data in the database; report that
+  # honestly (there is no reliable "nothing to do" signal in its output).
+  changed_when: true

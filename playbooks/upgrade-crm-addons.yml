@@ -1,0 +1,20 @@
+---
+# earnkit — upgrade the custom CRM addons across ALL team databases in one
+# command (the PLAN-cohort-dash.md odoo upgrade path). Team databases are
+# discovered at runtime from Postgres (every crm-<team_slug>_vc database) —
+# never a hardcoded list. Run after the custom-addon checkouts update (a re-run
+# of the odoo role, or a git pull under /opt/odoo/custom-addons/).
+#
+# Usage:
+#   ansible-playbook -i <inventory> playbooks/upgrade-crm-addons.yml
+# One module only (default is every custom addon):
+#   ansible-playbook -i <inventory> playbooks/upgrade-crm-addons.yml \
+#     -e odoo_upgrade_modules=crm_outreach_runner
+- name: Upgrade custom CRM addons in every team database
+  hosts: cohort
+  become: true
+  tasks:
+    - name: Run the odoo role's upgrade-addons tasks
+      ansible.builtin.include_role:
+        name: odoo
+        tasks_from: upgrade-addons

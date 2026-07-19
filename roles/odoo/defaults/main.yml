@@ -30,6 +30,12 @@ odoo_limit_time_real: 120
 odoo_systemd_memory_high: 3G
 odoo_systemd_memory_max: 4G
 
+# --- addon upgrades (tasks/upgrade-addons.yml, playbooks/upgrade-crm-addons.yml)
+# Modules passed to odoo-bin -u on every team database after the custom-addon
+# checkouts update. Defaults to every custom addon this role clones; narrow
+# with -e odoo_upgrade_modules=crm_outreach_runner for a single-module run.
+odoo_upgrade_modules: "{{ odoo_custom_addons | map(attribute='name') | join(',') }}"
+
 # --- database manager exposure -----------------------------------------------
 # Keep false: team databases are created by playbooks/add-team.yml over the
 # network, never through the /web/database UI. Flip to true temporarily only
