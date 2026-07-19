@@ -7,10 +7,12 @@
 #   govkit_db_password, govkit_secret_key, govkit_http_port,
 #   oidc_issuer, govkit_oidc_client_id, govkit_oidc_client_secret,
 #   govkit_s2s_token, amebo_api_port, amebo_s2s_token
-# plus ONE new site var (add to your inventory):
+# plus TWO new site vars (add to your inventory):
 #   govkit_fernet_key — Fernet key encrypting task-source API tokens at rest
 #     (the app's GOVKIT_SECRET_KEY, distinct from Django's SECRET_KEY).
 #     Generate: python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+#   govkit_cors_origins — comma-separated origins allowed credentialed CORS
+#     on the API (the cohort dash on the workers.vc apex; PLAN-cohort-dash.md)
 # This role uses exactly those names and defines nothing that shadows them.
 
 # --- filesystem layout (cicd/update-govkit and add-team.yml assume these) -----
@@ -33,6 +35,10 @@ govkit_memory_max: 512M
 # Fernet key for stored task-source tokens. Empty works until a team configures
 # a Task Source (the app then refuses to save the token) — set it in group_vars.
 govkit_fernet_key: ""
+
+# CORS allowlist for the cohort dash (set in group_vars). Empty = no
+# cross-origin API access — safe fallback for inventories predating the dash.
+govkit_cors_origins: ""
 
 # --- derived (do not override) ----------------------------------------------------
 govkit_database_url: "postgres://{{ govkit_db_user }}:{{ govkit_db_password | urlencode }}@{{ database_host }}:{{ database_port }}/{{ govkit_db_name }}"
