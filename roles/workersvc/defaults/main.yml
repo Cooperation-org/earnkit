@@ -6,7 +6,10 @@
 #   workersvc_repo, workersvc_branch, workersvc_domain, workersvc_db_name,
 #   workersvc_db_user, workersvc_db_password, workersvc_secret_key,
 #   workersvc_http_port, workersvc_govkit_org_slug, workersvc_dashboard_url,
-#   govkit_http_port, govkit_s2s_token, lt_api
+#   govkit_http_port, govkit_s2s_token, lt_api,
+#   workersvc_lt_client_id, workersvc_lt_client_secret,
+#   govkit_domain, amebo_domain, marten_domain, amebo_api_port,
+#   workersvc_amebo_api_token
 # This role uses exactly those names and defines nothing that shadows them.
 
 # --- filesystem layout (cicd/update-workersvc assumes these) -------------------
@@ -25,6 +28,11 @@ workersvc_env_file: "{{ workersvc_src_dir }}/.env"
 workersvc_bind: "127.0.0.1"
 # Doorway commit page accepts photo/video uploads.
 workersvc_max_upload_size: 50m
+
+# amebo links token for the dash tools row (a personal amebo JWT until amebo
+# grows service auth — see PLAN-cohort-dash.md). Empty omits the row — safe
+# fallback for inventories predating the dash; set the real value in group_vars.
+workersvc_amebo_api_token: ""
 
 # --- gunicorn / systemd tuning ---------------------------------------------------
 workersvc_gunicorn_workers: 3
