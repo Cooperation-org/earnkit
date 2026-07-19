@@ -88,29 +88,43 @@ by playbook run (config changes don't ride the git-push CI).
 
 ### Work items
 
-1. **govkit.env.j2** — add GovKit's CORS origins (new var, e.g.
-   `govkit_cors_origins`, cohort value
-   `https://workers.vc,https://www.workers.vc`) once govkit reads
-   `CORS_ALLOWED_ORIGINS` from env (govkit plan item 1).
-2. **amebo.env.j2** — set
-   `CORS_ORIGINS=https://workers.vc,https://www.workers.vc,https://amebo.workers.vc`
-   (amebo plan item 2; today the default origin list applies because the
-   env never sets it).
-3. **workersvc.env.j2** — add the browser-facing vars the dash template
-   needs: `GOVKIT_PUBLIC_URL=https://dash.workers.vc`,
-   `AMEBO_PUBLIC_URL=https://amebo.workers.vc`, and the marten public
-   URL `https://martin.workers.vc` (name per workers.vc plan item 8);
-   later the amebo links API key replacing the personal-JWT
-   `AMEBO_API_TOKEN` (amebo plan item 3).
-4. **Odoo module upgrade path** — the outreach endpoint (crm plan) needs
-   `-u crm_outreach_runner` on every team DB after the addon updates:
-   add a small playbook or extend the odoo role with an
-   `upgrade-crm-addons` task that loops team DBs (source of truth for
-   the team list: the `crm-*` databases themselves), so addon updates
-   are one command instead of hand-run odoo-bin.
-5. **After each app change lands**: run the corresponding role/playbook
-   and verify with a credentialed curl from the VM (Origin header set)
-   that CORS headers come back on govkit + amebo APIs.
+1. **DONE 2026-07-19 — govkit.env.j2**: new site var
+   `govkit_cors_origins` (defined in group_vars, derived
+   `https://{{ workersvc_domain }},https://www.{{ workersvc_domain }}`
+   → the cohort value) renders `CORS_ALLOWED_ORIGINS=`; inert until
+   govkit adds django-cors-headers (govkit plan item 1). Empty default
+   in role defaults keeps older inventories rendering.
+2. **DONE 2026-07-19 — amebo.env.j2**: new site var `amebo_cors_origins`
+   (group_vars, derived → the cohort value incl. `https://amebo.workers.vc`)
+   renders `CORS_ORIGINS=`; empty/unset omits the line so amebo's
+   built-in default origin list still applies.
+3. **DONE 2026-07-19 — workersvc.env.j2**: renders
+   `GOVKIT_PUBLIC_URL=https://{{ govkit_domain }}`,
+   `AMEBO_PUBLIC_URL=https://{{ amebo_domain }}`,
+   `MARTEN_PUBLIC_URL=https://{{ marten_domain }}` (name follows the
+   settings' `*_PUBLIC_URL` convention — workers.vc plan item 8 names
+   the first two and leaves the marten one to convention; value keeps
+   the deployed `martin.` spelling via `marten_domain`). Also now
+   templates `AMEBO_API_BASE` + `AMEBO_API_TOKEN`
+   (`workersvc_amebo_api_token`, personal JWT) so a playbook run no
+   longer clobbers the hand-set token; commented for replacement by an
+   amebo API key when amebo plan item 3 lands.
+4. **DONE 2026-07-19 — Odoo module upgrade path**:
+   `playbooks/upgrade-crm-addons.yml` →
+   `roles/odoo/tasks/upgrade-addons.yml`. Discovers team DBs at runtime
+   (`pg_database` matching `^crm-[a-z0-9-]+_vc$`; never a hardcoded
+   list; base `crm_vc` deliberately excluded) and runs odoo-bin
+   `-u {{ odoo_upgrade_modules }}` (defaults to every custom addon;
+   `-e odoo_upgrade_modules=crm_outreach_runner` narrows) with
+   `--stop-after-init --no-http` on each. One command; safe to re-run.
+5. **OPERATOR — next action, not yet run**: after each app change lands,
+   run the corresponding role/playbook against the live inventory and
+   verify with a credentialed curl from the VM (Origin header set) that
+   CORS headers come back on govkit + amebo APIs. New group_vars to add
+   to the live inventory first: `govkit_cors_origins`,
+   `amebo_cors_origins`, `workersvc_amebo_api_token` (move the current
+   hand-set dash-tools JWT here), and the two `workersvc_lt_client_*`
+   vars now also documented in the example inventory.
 
 ### Notes for the operator (from 2026-07-19 research; not part of this
 plan's scope, decide separately)

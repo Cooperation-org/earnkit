@@ -115,6 +115,10 @@ amebo_abra_database_url: ""
 # amebo is the team registry, see docs/TEAM_PROVISIONING.md in the amebo repo).
 # The same value goes into the amebo AND govkit envs:
 amebo_s2s_token: "VAULT-ME"
+# Origins allowed credentialed CORS on amebo's API — the cohort dash on the
+# apex plus amebo's own host (PLAN-cohort-dash.md). Empty = amebo's built-in
+# default origin list:
+amebo_cors_origins: "https://{{ workersvc_domain }},https://www.{{ workersvc_domain }},https://{{ amebo_domain }}"
 
 # ---------------------------------------------------------------------------
 # GovKit (earned governance) — from source
@@ -133,6 +137,10 @@ govkit_fernet_key: "VAULT-ME"        # python3 -c "from cryptography.fernet impo
 # The same value goes into the govkit AND workersvc envs; empty disables the
 # endpoints (every call 401s):
 govkit_s2s_token: "VAULT-ME"
+# Origins allowed credentialed CORS on GovKit's API — the cohort dash lives on
+# the apex and mounts GovKit's embed components (PLAN-cohort-dash.md). Empty
+# disables cross-origin API access:
+govkit_cors_origins: "https://{{ workersvc_domain }},https://www.{{ workersvc_domain }}"
 
 # ---------------------------------------------------------------------------
 # workersvc (Workers.vc public face) — from source
@@ -151,6 +159,14 @@ workersvc_dashboard_url: "https://dash.{{ cohort_domain }}"
 # LinkedTrust claims backend the doorway posts signed claims to (same host as
 # oidc_issuer today, but a distinct role — keep them separate vars):
 lt_api: https://live.linkedtrust.us
+# LinkedTrust client credentials for the doorway's claim POSTs (issuer-stamped
+# approval claims) — registered on the IdP by the operator:
+workersvc_lt_client_id: "lt_xxxxxxxxxxxxxxxx"
+workersvc_lt_client_secret: "VAULT-ME"
+# amebo links token for the dash tools row — a personal amebo JWT until amebo
+# grows service auth for /api/organizations/links (PLAN-cohort-dash.md; will
+# become an amebo API key). Empty omits the tools row:
+workersvc_amebo_api_token: "VAULT-ME"
 
 # ---------------------------------------------------------------------------
 # Caddy API on Proxmox host (auto-provisions CRM subdomain routes + TLS)
