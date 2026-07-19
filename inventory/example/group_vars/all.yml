@@ -153,7 +153,7 @@ workersvc_db_user: workersvc_VMNAME
 workersvc_db_password: "VAULT-ME"
 workersvc_secret_key: "VAULT-ME"
 # GovKit org whose invites the doorway resolves:
-workersvc_govkit_org_slug: earnedgov
+workersvc_govkit_org_slug: workersvc
 # Where "go to your dashboard" points after joining:
 workersvc_dashboard_url: "https://dash.{{ cohort_domain }}"
 # LinkedTrust claims backend the doorway posts signed claims to (same host as
