@@ -113,6 +113,23 @@
       become_user: odoo
       when: odoo_db.changed
 
+    # Brand the fresh DB: company name + frozen base url (same step as
+    # playbooks/brand-team-crm.yml, which also covers pre-existing teams).
+    - name: "Odoo: brand crm-{{ team_slug }} (company name, web.base.url)"
+      ansible.builtin.shell:
+        cmd: |
+          /opt/odoo/venv/bin/python /opt/odoo/odoo/odoo-bin shell \
+            -c /etc/odoo/odoo.conf -d crm-{{ team_slug }} --no-http <<'PY'
+          company = env.ref('base.main_company')
+          company.write({'name': """{{ team_name }}"""})
+          icp = env['ir.config_parameter'].sudo()
+          icp.set_param('web.base.url', 'https://crm-{{ team_slug }}.{{ cohort_domain }}')
+          icp.set_param('web.base.url.freeze', 'True')
+          env.cr.commit()
+          PY
+      become_user: odoo
+      when: odoo_db.changed
+
     # ---- Taiga: one private project per team ------------------------------
     - name: "Taiga: private project {{ team_slug }}"
       ansible.builtin.shell: |

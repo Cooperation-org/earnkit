@@ -1,0 +1,57 @@
+---
+# earnkit — brand a team CRM database so it stops presenting as stock Odoo
+# ("YourCompany"): the company record carries the team's name (documents,
+# emails, login header all follow it), web.base.url is set and frozen to the
+# team's host (links in invites/emails otherwise point at localhost), and an
+# optional PNG becomes the company logo.
+#
+# Idempotent; safe to re-run. add-team.yml runs the same branding for new
+# teams; this standalone covers teams created before it existed (e.g. vc).
+#
+# Usage:
+#   ansible-playbook -i <inventory> playbooks/brand-team-crm.yml \
+#     -e team_slug=vc -e team_name='Workers.vc' \
+#     [-e logo_path=/opt/earnkit/files/team-logo.png]   # PNG on the VM
+- name: Brand a team CRM
+  hosts: cohort
+  become: true
+
+  pre_tasks:
+    - name: Validate team vars
+      ansible.builtin.assert:
+        that:
+          - team_slug is match('^[a-z0-9][a-z0-9-]{1,30}$')
+          - team_name | length > 1
+        fail_msg: "Pass -e team_slug=<slug> -e team_name='<Display Name>'"
+
+  tasks:
+    - name: "Read the logo file (optional)"
+      ansible.builtin.slurp:
+        src: "{{ logo_path }}"
+      register: crm_logo
+      when: logo_path is defined
+
+    - name: "Odoo: brand crm-{{ team_slug }} (company name, web.base.url{{ ', logo' if logo_path is defined else '' }})"
+      ansible.builtin.shell:
+        cmd: |
+          /opt/odoo/venv/bin/python /opt/odoo/odoo/odoo-bin shell \
+            -c /etc/odoo/odoo.conf -d crm-{{ team_slug }} --no-http <<'PY'
+          company = env.ref('base.main_company')
+          vals = {'name': """{{ team_name }}"""}
+          {% if logo_path is defined %}
+          vals['logo'] = """{{ crm_logo.content }}"""
+          {% endif %}
+          company.write(vals)
+          icp = env['ir.config_parameter'].sudo()
+          icp.set_param('web.base.url', 'https://crm-{{ team_slug }}.{{ cohort_domain }}')
+          icp.set_param('web.base.url.freeze', 'True')
+          env.cr.commit()
+          print('branded:', company.name)
+          PY
+      become_user: odoo
+      register: brand_out
+      changed_when: "'branded:' in brand_out.stdout"
+
+    - name: Branding result
+      ansible.builtin.debug:
+        msg: "{{ brand_out.stdout_lines | last }}"
