@@ -1,0 +1,76 @@
+# Rendered by playbooks/sync-team-members.yml; fed to `odoo-bin shell` on
+# stdin against ONE team database (crm-{{ sync_org_slug }}). Member data is
+# b64-encoded JSON so no email or name ever needs shell/python quoting.
+#
+# Identity contract: stock auth_oauth signs a login in by matching
+# res.users (oauth_provider_id, oauth_uid) — oauth_uid is the OIDC 'sub'
+# from the LinkedTrust issuer, the same subject GovKit stores in
+# accounts_user.auth_provider_id. Pre-creating the user with that pair makes
+# the first OIDC login resolve to THIS user instead of a signup.
+#
+# Idempotent: creates or links only. Never removes a group, never overwrites
+# a different existing oauth_uid, never deactivates or reactivates anyone.
+import base64
+import json
+import sys
+
+members = json.loads(base64.b64decode("{{ sync_members | to_json | b64encode }}"))
+group_xmlids = json.loads(base64.b64decode(
+    "{{ odoo_member_group_xmlids | default(['base.group_user', 'sales_team.group_sale_salesman_all_leads']) | to_json | b64encode }}"))
+
+provider = env['auth.oauth.provider'].search([('name', '=', 'LinkedTrust')], limit=1)
+if not provider:
+    print("SYNC-RESULT fail: no LinkedTrust auth_oauth provider in this database "
+          "(add-team.yml creates it)")
+    sys.exit(1)
+
+groups = []
+for xmlid in group_xmlids:
+    group = env.ref(xmlid, raise_if_not_found=False)
+    if group is None:
+        print("SYNC-RESULT fail: group xmlid %s not found "
+              "(is its module installed in this database?)" % xmlid)
+        sys.exit(1)
+    groups.append(group)
+
+# active_test=False so deactivated users are SEEN (and left alone) instead of
+# silently recreated; no_reset_password so pre-creation sends no email.
+Users = env['res.users'].with_context(active_test=False, no_reset_password=True)
+changed = 0
+for m in members:
+    email = m['email']
+    sub = m['auth_provider_id']
+    user = Users.search([('oauth_provider_id', '=', provider.id),
+                         ('oauth_uid', '=', sub)], limit=1)
+    if not user:
+        by_login = Users.search([('login', '=', email)], limit=1)
+        if by_login and by_login.oauth_uid and by_login.oauth_uid != sub:
+            print("skip: %s exists with a different oauth_uid — not relinking" % email)
+            continue
+        if by_login:
+            by_login.write({'oauth_provider_id': provider.id, 'oauth_uid': sub})
+            print("changed: linked existing user %s to their LinkedTrust subject" % email)
+            changed += 1
+            user = by_login
+        else:
+            user = Users.create({
+                'login': email,
+                'name': m.get('display_name') or email,
+                'email': email,
+                'oauth_provider_id': provider.id,
+                'oauth_uid': sub,
+                'groups_id': [(6, 0, [g.id for g in groups])],
+            })
+            print("changed: created internal user %s" % email)
+            changed += 1
+    if not user.active:
+        print("skip: %s is deactivated — leaving untouched" % email)
+        continue
+    missing = [g.id for g in groups if g not in user.groups_id]
+    if missing:
+        user.write({'groups_id': [(4, gid) for gid in missing]})
+        print("changed: granted %d missing group(s) to %s" % (len(missing), email))
+        changed += 1
+
+env.cr.commit()
+print("SYNC-RESULT ok changed=%d members=%d" % (changed, len(members)))

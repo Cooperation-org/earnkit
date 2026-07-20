@@ -1,0 +1,171 @@
+---
+# earnkit — sync every GovKit member of each team org into the team's other
+# tools, so their first OIDC login lands on a ready account:
+#
+#   * Odoo:  an INTERNAL user in the team's crm-<slug> database, in the groups
+#            {{ odoo_member_group_xmlids }} and linked to their LinkedTrust
+#            identity (auth_oauth matches on oauth_uid = the OIDC sub, so the
+#            pre-created user IS the one their login resolves to).
+#   * Taiga: a user + AuthData(key='linkedtrust', value=sub) + a Membership in
+#            the team's project — the same rows the LinkedTrust auth plugin
+#            would converge to at first login (see the script's docstring).
+#
+# Source of truth for WHO: GovKit memberships (orgs_membership -> accounts_user;
+# the LinkedTrust sub is accounts_user.auth_provider_id where
+# auth_provider='linkedtrust'). Members who have not yet signed into GovKit
+# with LinkedTrust have no sub and are reported + skipped — re-run later.
+#
+# Source of truth for WHICH TEAMS: the crm-<slug> databases owned by
+# {{ odoo_db_user }} (discovered at runtime, never a hardcoded list),
+# intersected with GovKit's org slugs. Non-team databases are never touched.
+#
+# Idempotent: re-running changes nothing for already-provisioned members.
+# It only ever creates or links; it never removes a group, role, or
+# membership, never deactivates anyone, and never relinks a user who already
+# carries a DIFFERENT LinkedTrust sub (those are reported for the operator).
+#
+# When to run (operator, one command): after add-team.yml, and again whenever
+# team membership changes. Per DECISIONS.md #6 member orchestration ultimately
+# belongs to amebo; this playbook is the operator-run reconcile until amebo's
+# member provisioning covers the CRM and Taiga.
+#
+# Usage:
+#   ansible-playbook -i <inventory> playbooks/sync-team-members.yml
+- name: Sync GovKit org members into team CRM databases and Taiga projects
+  hosts: cohort
+  become: true
+  tasks:
+    # ---- GovKit: the member list (source of truth) -------------------------
+    - name: "GovKit: read org memberships"
+      community.postgresql.postgresql_query:
+        login_host: "{{ database_host }}"
+        login_port: "{{ database_port }}"
+        login_user: "{{ govkit_db_user }}"
+        login_password: "{{ govkit_db_password }}"
+        db: "{{ govkit_db_name }}"
+        query: >
+          SELECT o.slug AS org_slug, u.email, u.display_name,
+                 u.auth_provider, u.auth_provider_id
+          FROM orgs_membership m
+          JOIN orgs_org o ON o.id = m.org_id
+          JOIN accounts_user u ON u.id = m.user_id
+          WHERE u.is_active
+          ORDER BY o.slug, u.email
+      register: govkit_members
+      changed_when: false
+
+    # ---- Odoo: which teams exist (same discovery as upgrade-addons) --------
+    - name: "Odoo: discover team CRM databases (crm-<slug> owned by {{ odoo_db_user }})"
+      community.postgresql.postgresql_query:
+        login_host: "{{ database_host }}"
+        login_port: "{{ database_port }}"
+        login_user: "{{ odoo_db_user }}"
+        login_password: "{{ odoo_db_password }}"
+        db: postgres
+        query: >
+          SELECT d.datname FROM pg_database d
+          JOIN pg_roles r ON r.oid = d.datdba
+          WHERE r.rolname = %(owner)s
+            AND d.datname ~ '^crm-[a-z0-9-]+$'
+          ORDER BY d.datname
+        named_args:
+          owner: "{{ odoo_db_user }}"
+      register: crm_dbs
+      changed_when: false
+
+    - name: Compute team slugs and provisionable members
+      ansible.builtin.set_fact:
+        # Teams = GovKit orgs that have a CRM database. Orgs without one are
+        # reported below, never guessed at.
+        sync_team_slugs: >-
+          {{ crm_dbs.query_result | map(attribute='datname')
+             | map('regex_replace', '^crm-', '') | list
+             | intersect(govkit_members.query_result
+                         | map(attribute='org_slug') | unique | list)
+             | sort }}
+        # Provisionable = the member has a LinkedTrust subject. Without it
+        # there is nothing to link an OIDC login to — no email guessing.
+        sync_linked: >-
+          {{ govkit_members.query_result
+             | selectattr('auth_provider', 'equalto', 'linkedtrust')
+             | selectattr('auth_provider_id') | list }}
+
+    - name: "Report: GovKit orgs without a team CRM database (skipped)"
+      ansible.builtin.debug:
+        msg: >-
+          No crm-<slug> database for GovKit org(s)
+          {{ orphan_orgs | join(', ') }} — run add-team.yml for real teams;
+          nothing synced for them.
+      vars:
+        orphan_orgs: >-
+          {{ govkit_members.query_result | map(attribute='org_slug')
+             | unique | list | difference(sync_team_slugs) }}
+      when: orphan_orgs | length > 0
+
+    - name: "Report: members without a LinkedTrust identity yet (skipped)"
+      ansible.builtin.debug:
+        msg: >-
+          No LinkedTrust subject in GovKit for
+          {{ unlinked | map(attribute='email') | join(', ') }} — they have not
+          signed into GovKit with LinkedTrust yet. Re-run after they do.
+      vars:
+        unlinked: >-
+          {{ govkit_members.query_result
+             | selectattr('org_slug', 'in', sync_team_slugs)
+             | rejectattr('auth_provider_id') | list
+             + govkit_members.query_result
+             | selectattr('org_slug', 'in', sync_team_slugs)
+             | selectattr('auth_provider_id')
+             | rejectattr('auth_provider', 'equalto', 'linkedtrust') | list }}
+      when: unlinked | length > 0
+
+    # ---- Odoo: internal user per member, linked to the LinkedTrust sub -----
+    # Same odoo-bin shell invocation as add-team.yml's provider task; the
+    # script is templated onto stdin so member data never hits a shell line.
+    - name: "Odoo: sync members into crm-<slug>"
+      ansible.builtin.command:
+        argv:
+          - /opt/odoo/venv/bin/python
+          - /opt/odoo/odoo/odoo-bin
+          - shell
+          - -c
+          - /etc/odoo/odoo.conf
+          - -d
+          - "crm-{{ item }}"
+          - --no-http
+        stdin: "{{ lookup('template', 'sync-members-odoo.py.j2') }}"
+      vars:
+        sync_org_slug: "{{ item }}"
+        sync_members: "{{ sync_linked | selectattr('org_slug', 'equalto', item) | list }}"
+      loop: "{{ sync_team_slugs }}"
+      become_user: odoo
+      register: odoo_sync
+      changed_when: "'changed:' in odoo_sync.stdout"
+      failed_when: odoo_sync.rc != 0 or 'SYNC-RESULT ok' not in odoo_sync.stdout
+
+    # ---- Taiga: user + LinkedTrust AuthData + project membership -----------
+    # Same manage.py shell pattern as add-team.yml's project task (piped
+    # stdin instead of -c so the member data never needs shell quoting).
+    - name: "Taiga: sync members into project <slug>"
+      ansible.builtin.command:
+        argv:
+          - /opt/taiga/venv/bin/python
+          - /opt/taiga/taiga-back/manage.py
+          - shell
+        stdin: "{{ lookup('template', 'sync-members-taiga.py.j2') }}"
+      vars:
+        sync_org_slug: "{{ item }}"
+        sync_members: "{{ sync_linked | selectattr('org_slug', 'equalto', item) | list }}"
+      loop: "{{ sync_team_slugs }}"
+      become_user: taiga
+      register: taiga_sync
+      changed_when: "'changed:' in taiga_sync.stdout"
+      failed_when: taiga_sync.rc != 0 or 'SYNC-RESULT ok' not in taiga_sync.stdout
+
+    - name: "Summary: per-team sync results"
+      ansible.builtin.debug:
+        msg: |
+          {% for r in odoo_sync.results %}crm-{{ r.item }}: {{ r.stdout_lines | select('match', '^(changed|skip|SYNC-RESULT)') | join('; ') }}
+          {% endfor %}
+          {% for r in taiga_sync.results %}taiga {{ r.item }}: {{ r.stdout_lines | select('match', '^(changed|skip|SYNC-RESULT)') | join('; ') }}
+          {% endfor %}

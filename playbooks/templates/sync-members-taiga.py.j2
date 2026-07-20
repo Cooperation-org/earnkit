@@ -1,0 +1,87 @@
+# Rendered by playbooks/sync-team-members.yml; fed to `manage.py shell` on
+# stdin (Django exec()s piped stdin). Member data is b64-encoded JSON so no
+# email or name ever needs shell/python quoting.
+#
+# Identity contract: this mirrors linkedtrust_register() in
+# taiga-contrib-linkedtrust-auth (back/.../services.py) — the association is
+# users.AuthData(key='linkedtrust', value=<OIDC sub>), with the plugin's own
+# match-existing-account-by-email fallback — so a member provisioned here and
+# one who logs in first converge on the SAME user. Unlike the plugin it sends
+# no registration email (bulk sync must be silent).
+#
+# Idempotent: creates or links only. Never changes an existing membership's
+# role or is_admin, never removes anything, never rebinds a user who already
+# carries a DIFFERENT LinkedTrust subject.
+import base64
+import json
+import sys
+
+from django.apps import apps
+from django.db import transaction
+
+from taiga.base.utils.slug import slugify_uniquely
+
+members = json.loads(base64.b64decode("{{ sync_members | to_json | b64encode }}"))
+org_slug = json.loads(base64.b64decode("{{ sync_org_slug | to_json | b64encode }}"))
+role_slug = json.loads(base64.b64decode("{{ taiga_member_role_slug | default('back') | to_json | b64encode }}"))
+
+User = apps.get_model("users", "User")
+AuthData = apps.get_model("users", "AuthData")
+Project = apps.get_model("projects", "Project")
+Membership = apps.get_model("projects", "Membership")
+
+project = Project.objects.filter(slug=org_slug).first()
+if project is None:
+    print("skip: no taiga project '%s' (add-team.yml creates it)" % org_slug)
+    print("SYNC-RESULT ok changed=0 members=%d" % len(members))
+    sys.exit(0)
+
+role = project.roles.filter(slug=role_slug).first()
+if role is None:
+    print("SYNC-RESULT fail: project '%s' has no role slug '%s' "
+          "(available: %s) — set taiga_member_role_slug to one of them"
+          % (org_slug, role_slug,
+             ", ".join(sorted(r.slug for r in project.roles.all())) or "none"))
+    sys.exit(1)
+
+changed = 0
+with transaction.atomic():
+    for m in members:
+        email = m["email"]
+        sub = m["auth_provider_id"]
+        auth = AuthData.objects.filter(key="linkedtrust", value=sub).first()
+        if auth is not None:
+            user = auth.user
+        else:
+            user = User.objects.filter(email__iexact=email).first()
+            if user is not None and AuthData.objects.filter(
+                    user=user, key="linkedtrust").exclude(value=sub).exists():
+                print("skip: %s already carries a different LinkedTrust "
+                      "subject — not rebinding" % email)
+                continue
+            if user is None:
+                username = slugify_uniquely(email.split("@")[0], User,
+                                            slugfield="username")
+                user = User.objects.create(email=email, username=username,
+                                           full_name=m.get("display_name") or email)
+                print("changed: created taiga user %s" % email)
+                changed += 1
+            AuthData.objects.create(user=user, key="linkedtrust",
+                                    value=sub, extra={})
+            print("changed: linked %s to their LinkedTrust subject" % email)
+            changed += 1
+        if Membership.objects.filter(project=project, user=user).exists():
+            continue
+        pending = Membership.objects.filter(project=project, user__isnull=True,
+                                            email__iexact=email).first()
+        if pending is not None:
+            pending.user = user
+            pending.save(update_fields=["user"])
+            print("changed: attached %s to their pending invitation" % email)
+        else:
+            Membership.objects.create(project=project, user=user, role=role,
+                                      is_admin=False, email=user.email)
+            print("changed: added %s to project %s" % (email, org_slug))
+        changed += 1
+
+print("SYNC-RESULT ok changed=%d members=%d" % (changed, len(members)))

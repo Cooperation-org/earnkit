@@ -119,14 +119,41 @@ by playbook run (config changes don't ride the git-push CI).
    `-u {{ odoo_upgrade_modules }}` (defaults to every custom addon;
    `-e odoo_upgrade_modules=crm_outreach_runner` narrows) with
    `--stop-after-init --no-http` on each. One command; safe to re-run.
-5. **OPERATOR — next action, not yet run**: after each app change lands,
+5. **DONE 2026-07-20 — member provisioning sync**:
+   `playbooks/sync-team-members.yml`, one idempotent command; run after
+   add-team.yml and again whenever membership changes. Source of truth
+   is GovKit memberships (`orgs_membership` → `accounts_user`; the
+   LinkedTrust OIDC sub is `accounts_user.auth_provider_id` where
+   `auth_provider='linkedtrust'`), synced into every org that has a
+   `crm-<slug>` database (runtime, owner-checked discovery — same as
+   the addon upgrade). Per team: an Odoo INTERNAL user in `crm-<slug>`
+   with `odoo_member_group_xmlids` (default `base.group_user` +
+   `sales_team.group_sale_salesman_all_leads`), linked by
+   `oauth_uid=<sub>` on the LinkedTrust provider row so stock
+   auth_oauth resolves the first OIDC login to the pre-created user;
+   and a Taiga user + `AuthData(key='linkedtrust', value=<sub>)` +
+   project `Membership` with `taiga_member_role_slug` — mirroring
+   `linkedtrust_register()` in taiga-contrib-linkedtrust-auth so sync
+   and login converge on the same user (no emails sent). Members with
+   no LT sub yet (never signed into GovKit via LinkedTrust) are
+   reported and skipped; never downgrades, deactivates, or relinks a
+   different sub. Per DECISIONS.md #6 this is the operator-run
+   reconcile until amebo's member provisioning covers CRM + Taiga.
+   Follow-up noted, not done: write the created Taiga ids back to
+   GovKit `Membership.taiga_user_id`/`taiga_username` (the explicit
+   identity map the valuation pipeline uses).
+6. **OPERATOR — next action, not yet run**: after each app change lands,
    run the corresponding role/playbook against the live inventory and
    verify with a credentialed curl from the VM (Origin header set) that
    CORS headers come back on govkit + amebo APIs. New group_vars to add
    to the live inventory first: `govkit_cors_origins`,
    `amebo_cors_origins`, `workersvc_amebo_api_token` (move the current
-   hand-set dash-tools JWT here), and the two `workersvc_lt_client_*`
-   vars now also documented in the example inventory.
+   hand-set dash-tools JWT here), the two `workersvc_lt_client_*` vars,
+   `govkit_cohort_front_door`, and for the member sync
+   `taiga_member_role_slug` + `odoo_member_group_xmlids` — all
+   documented in the example inventory. Then run
+   `playbooks/sync-team-members.yml` once per team ramp-up and after
+   membership changes.
 
 ### Notes for the operator (from 2026-07-19 research; not part of this
 plan's scope, decide separately)

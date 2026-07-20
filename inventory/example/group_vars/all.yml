@@ -60,6 +60,11 @@ taiga_db_user: taiga_VMNAME
 taiga_db_password: "VAULT-ME"
 taiga_secret_key: "VAULT-ME"
 taiga_admin_email: admin@example.org
+# Project role (slug) synced members get in the team's Taiga project
+# (playbooks/sync-team-members.yml). Must exist in the project — the default
+# scrum-template slugs are ux, design, front, back, product-owner, stakeholder.
+# The sync fails per-project, listing the available slugs, if it doesn't match:
+taiga_member_role_slug: back
 # RabbitMQ (local, the only stateful non-Postgres dep; used by taiga events/async)
 rabbitmq_taiga_user: taiga
 rabbitmq_taiga_password: "VAULT-ME"
@@ -97,6 +102,12 @@ odoo_custom_addons:
   - { name: crm_outreach_runner, repo: "git@github.com:Cooperation-org/crm-outreach-runner.git", branch: master }
 # Modules initialized in each new team DB (add-team.yml):
 odoo_team_init_modules: "base,crm,auth_oauth,crm_card_scanner,crm_outreach_runner"
+# Groups every synced team member gets in their team's CRM database
+# (playbooks/sync-team-members.yml). XML ids; base.group_user makes them
+# INTERNAL users, the sales group lets them see and work all leads:
+odoo_member_group_xmlids:
+  - base.group_user
+  - sales_team.group_sale_salesman_all_leads
 
 # ---------------------------------------------------------------------------
 # amebo (team agent) — from source; multitenant via its instances table
