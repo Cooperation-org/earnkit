@@ -121,12 +121,12 @@ amebo_s2s_token: "VAULT-ME"
 # Origins allowed credentialed CORS on amebo's API — the cohort dash on the
 # apex plus amebo's own host (PLAN-cohort-dash.md). Empty = amebo's built-in
 # default origin list:
-amebo_cors_origins: "https://{{ workersvc_domain }},https://www.{{ workersvc_domain }},https://{{ amebo_domain }}"
+amebo_cors_origins: "https://{{ workersvc_domain }},https://{{ amebo_domain }}"
 
 # Origins amebo's OIDC login may return a ?next= chain hop to — lets the dash
 # sign-in cascade pass through amebo and land back on the apex (amebo
 # PLAN-cohort-dash.md, SSO-once addition). Empty allows FRONTEND_URL only:
-amebo_oidc_next_allowed_origins: "https://{{ workersvc_domain }},https://www.{{ workersvc_domain }}"
+amebo_oidc_next_allowed_origins: "https://{{ workersvc_domain }}"
 
 # ---------------------------------------------------------------------------
 # GovKit (earned governance) — from source
@@ -148,12 +148,12 @@ govkit_s2s_token: "VAULT-ME"
 # Origins allowed credentialed CORS on GovKit's API — the cohort dash lives on
 # the apex and mounts GovKit's embed components (PLAN-cohort-dash.md). Empty
 # disables cross-origin API access:
-govkit_cors_origins: "https://{{ workersvc_domain }},https://www.{{ workersvc_domain }}"
+govkit_cors_origins: "https://{{ workersvc_domain }}"
 
 # Hostnames GovKit may bounce an absolute https ?next= to after LinkedTrust
 # login — lets the dash sign-in cascade return to the apex (govkit
 # PLAN-cohort-dash.md item 6). Empty keeps next= same-site only:
-govkit_login_next_allowed_hosts: "{{ workersvc_domain }},www.{{ workersvc_domain }}"
+govkit_login_next_allowed_hosts: "{{ workersvc_domain }}"
 
 # ---------------------------------------------------------------------------
 # workersvc (Workers.vc public face) — from source

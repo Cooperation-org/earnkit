@@ -23,6 +23,35 @@
 
   tasks:
     # ---- Odoo: one database per team --------------------------------------
+    # HARD GUARD. postgresql_db state:present is create-or-reuse, and this
+    # Postgres cluster is shared with unrelated projects. Silently reusing an
+    # existing name would attach a new team's CRM to somebody else's data —
+    # unrecoverable once Odoo writes to it. Refuse to touch a name that already
+    # exists; a collision is always an operator decision, never an automatic one.
+    - name: "Odoo: does database crm-{{ team_slug }} already exist?"
+      community.postgresql.postgresql_query:
+        login_host: "{{ database_host }}"
+        login_port: "{{ database_port }}"
+        login_user: "{{ database_admin_user }}"
+        login_password: "{{ database_admin_password }}"
+        db: postgres
+        query: "SELECT 1 FROM pg_database WHERE datname = %(name)s"
+        named_args:
+          name: "crm-{{ team_slug }}"
+      register: crm_db_probe
+      no_log: true
+
+    - name: "STOP — database crm-{{ team_slug }} already exists"
+      ansible.builtin.fail:
+        msg: >-
+          Database crm-{{ team_slug }} already exists on {{ database_host }}.
+          Refusing to provision team '{{ team_slug }}'. The cluster is shared,
+          so this name may belong to another team or another project entirely,
+          and pointing Odoo at it would mix or destroy that data. Choose a
+          different team_slug, or drop/rename the existing database by hand
+          first if you are certain it is stale.
+      when: (crm_db_probe.query_result | default([]) | length) > 0
+
     # Mirrors Odoo's own createdb (unicode, template0, C collate).
     - name: "Odoo DB crm-{{ team_slug }}"
       community.postgresql.postgresql_db:
