@@ -14,6 +14,11 @@ Environment=PYTHONUNBUFFERED=1
 ExecStart={{ amebo_venv_dir }}/bin/python -m src.main
 Restart=on-failure
 RestartSec=5
+# amebo's shutdown completes but the process lingers (non-daemon scheduler /
+# Slack threads), so a plain restart hangs in deactivating for systemd's 90s
+# default = 90s of 502 on every deploy. Kill the group after 20s instead.
+TimeoutStopSec=20
+KillMode=mixed
 MemoryMax={{ amebo_memory_max }}
 NoNewPrivileges=true
 PrivateTmp=true
