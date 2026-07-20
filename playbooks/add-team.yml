@@ -131,26 +131,12 @@
       register: taiga_proj
       changed_when: "'created' in taiga_proj.stdout"
 
-    # ---- amebo: one instance row per team ---------------------------------
-    - name: "amebo: instance row for {{ team_slug }}"
-      community.postgresql.postgresql_query:
-        login_host: "{{ database_host }}"
-        login_port: "{{ database_port }}"
-        login_user: "{{ amebo_db_user }}"
-        login_password: "{{ amebo_db_password }}"
-        db: "{{ amebo_db_name }}"
-        query: >
-          INSERT INTO instances (name, slug, config)
-          SELECT %(name)s, %(slug)s, '{"allowed_tools": []}'::jsonb
-          WHERE NOT EXISTS (SELECT 1 FROM instances WHERE slug = %(slug)s)
-        named_args:
-          name: "{{ team_name }}"
-          slug: "{{ team_slug }}"
-
     # ---- amebo: register the org in the team registry ----------------------
     # amebo is the team registry — the operational system-of-record for orgs,
     # members, and per-tool accounts (docs/TEAM_PROVISIONING.md in the amebo
     # repo). The S2S endpoint upserts the org row; idempotent on slug.
+    # MUST run before the instance row below: the instance needs the org_id
+    # this returns.
     - name: "amebo: provision org {{ team_slug }} in the team registry"
       ansible.builtin.uri:
         url: "http://127.0.0.1:{{ amebo_api_port }}/api/orgs/provision"
@@ -164,6 +150,28 @@
           source: "add-team"
           members: []
         status_code: 200
+      register: amebo_org
+
+    # ---- amebo: one instance row per team ---------------------------------
+    # org_id is REQUIRED. amebo's dashboard endpoints (e.g. /api/organizations/
+    # links, /board) select `FROM instances WHERE org_id = %s`, so an instance
+    # with a NULL org_id is invisible to them and the dash renders empty rows
+    # with no error. It was omitted here originally.
+    - name: "amebo: instance row for {{ team_slug }}"
+      community.postgresql.postgresql_query:
+        login_host: "{{ database_host }}"
+        login_port: "{{ database_port }}"
+        login_user: "{{ amebo_db_user }}"
+        login_password: "{{ amebo_db_password }}"
+        db: "{{ amebo_db_name }}"
+        query: >
+          INSERT INTO instances (name, slug, org_id, config)
+          SELECT %(name)s, %(slug)s, %(org_id)s, '{"allowed_tools": []}'::jsonb
+          WHERE NOT EXISTS (SELECT 1 FROM instances WHERE slug = %(slug)s)
+        named_args:
+          name: "{{ team_name }}"
+          slug: "{{ team_slug }}"
+          org_id: "{{ amebo_org.json.org_id }}"
 
     # ---- GovKit: one org per team ------------------------------------------
     - name: "GovKit: org {{ team_slug }}"
