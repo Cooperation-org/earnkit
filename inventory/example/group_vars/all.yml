@@ -70,7 +70,8 @@ rabbitmq_taiga_vhost: taiga
 # ---------------------------------------------------------------------------
 marten_repo: git@github.com:Cooperation-org/marten.git
 marten_branch: main
-marten_domain: "martin.{{ cohort_domain }}"
+# marten is the animal; the earlier martin. spelling was a typo, now retired.
+marten_domain: "marten.{{ cohort_domain }}"
 
 # ---------------------------------------------------------------------------
 # Odoo 17 (CRM) — native source install; ONE DATABASE PER TEAM

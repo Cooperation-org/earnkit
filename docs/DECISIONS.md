@@ -29,7 +29,7 @@ Open questions for Golda (from the 7/6 spec, still open):
 - Cohort VM number/name/RAM when she creates it (500+, ~8GB/4c start).
 - ~~Hostname scheme~~ DECIDED 2026-07-13 (rev 2, Golda + two sessions concur):
   **the member chain lives on workers.vc** — invite doorways at
-  workers.vc/i/<code>, dashboard dash.workers.vc, taiga./martin./amebo./
+  workers.vc/i/<code>, dashboard dash.workers.vc, taiga./marten./amebo./
   crm-<team>.workers.vc (wildcard DNS -> host). Brand roles (rev 3): workers.vc = THE ACCELERATOR,
   whole public surface + member chain (landing, wall, opportunities, invites,
   dashboard); cooperation.org = movement umbrella; linkedtrust.us = the founding

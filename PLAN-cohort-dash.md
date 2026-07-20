@@ -53,7 +53,7 @@ component attribute there).
 | The pie | GovKit | `<govkit-pie>` | `dash.workers.vc/o/<org>/pie/` |
 | Earned on tasks (hours feed) | GovKit | `<govkit-feed>` | `dash.workers.vc/o/<org>/pie/` |
 | Curriculum tracker | GovKit (genesis checklist) | `<govkit-checklist>` | `dash.workers.vc/o/<org>/` |
-| Tasks to do | GovKit (tasksources → Taiga) | `<govkit-tasks>` | `martin.workers.vc/p/<org>/board` |
+| Tasks to do | GovKit (tasksources → Taiga) | `<govkit-tasks>` | `marten.workers.vc/p/<org>/board` |
 | Money | GovKit (projects app) | `<govkit-money>` | `dash.workers.vc/o/<org>/projects/` |
 | Reach out (CRM) | crm-outreach-runner (Odoo) | `<crm-reachout>` | `crm-<org>.workers.vc` Outreach Runner |
 | Ask amebo | amebo (exists) | `<amebo-ask>` | `amebo.workers.vc` |
@@ -104,7 +104,7 @@ by playbook run (config changes don't ride the git-push CI).
    `MARTEN_PUBLIC_URL=https://{{ marten_domain }}` (name follows the
    settings' `*_PUBLIC_URL` convention — workers.vc plan item 8 names
    the first two and leaves the marten one to convention; value keeps
-   the deployed `martin.` spelling via `marten_domain`). Also now
+   the deployed `marten.` spelling via `marten_domain`). Also now
    templates `AMEBO_API_BASE` + `AMEBO_API_TOKEN`
    (`workersvc_amebo_api_token`, personal JWT) so a playbook run no
    longer clobbers the hand-set token; commented for replacement by an
@@ -133,8 +133,8 @@ plan's scope, decide separately)
   secrets (DB admin password, OIDC client secret, S2S tokens, a private
   SSH key, caddy token) in plaintext, contrary to DECISIONS.md's
   "no secrets in git" rule.
-- `marten_domain` is `martin.workers.vc` (spelling) — everything in
-  these plans uses `martin.` to match what's deployed.
+- `marten_domain` is `marten.workers.vc` (the animal) — everything in
+  these plans uses `marten.`.
 - SSO-AND-TEAMS.md flags amebo's `LEGACY_ENV_ORG_ID` unscoped fallback
   as a launch-gate item before a second org exists.
 

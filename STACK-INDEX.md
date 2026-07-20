@@ -13,7 +13,7 @@ this file lives in earnkit because earnkit is the composition.
 | `dash.workers.vc` | GovKit (multitenant, one org per team) | Cooperation-org/govkit | 127.0.0.1:8010 |
 | `amebo.workers.vc` | amebo backend (+ `/embed/amebo.js`) | Cooperation-org/amebo | 127.0.0.1:8000 |
 | `taiga.workers.vc` | Taiga (API + events + static) | taiga-back/-front (upstream) | 127.0.0.1:8080 |
-| `martin.workers.vc` | Marten (SvelteKit static Taiga frontend) | Cooperation-org/marten | nginx static `/opt/marten/src/build` |
+| `marten.workers.vc` | Marten (SvelteKit static Taiga frontend) | Cooperation-org/marten | nginx static `/opt/marten/src/build` |
 | `crm.workers.vc`, `crm-<team>.workers.vc` | Odoo 17 CRM, one DB per team (`crm[-<team>]_vc`, dbfilter `^%d_vc$`) | odoo + crm-card-scanner + crm-outreach-runner | 127.0.0.1:8069 (ws 8072) |
 | `live.linkedtrust.us` | OIDC IdP for every app + the claims backend (`LT_API`) | (LinkedTrust) | external |
 | `amebo.linkedtrust.us` / `api.amebo.linkedtrust.us` | LinkedTrust's own amebo (reference frontend: key-links bar + campaigns board) | same amebo repo | external |
@@ -58,7 +58,7 @@ Auth: LinkedTrust OIDC (primary), Google, dev-login seam. Multitenancy: Org / Me
 - Slack: `/ask`, `/askall`, `/task <project> <subject> due:… [assign:…] [cash:N]` (creates Taiga task directly), `@amebo` mention → gated agentic path. **No hours-logging command exists.**
 - Multitenancy: instances ⟂ orgs (`instance_orgs`), org context repo (`organizations.context_repo`) declares tool bindings + campaigns.
 
-## marten (martin.workers.vc) — Taiga frontend
+## marten (marten.workers.vc) — Taiga frontend
 
 Routes: `/login` (LinkedTrust server-side OIDC primary, Google, Bluesky/ATProto, password), `/p/<slug>/board|backlog|epics|velocity`, `/tasks` (cross-project My Tasks), OAuth callbacks. Deep links: `/p/<slug>/board?story=<ref>`.
 Taiga API: Bearer JWT, refresh, wide-open CORS on taiga-back — external pages can call it with a token.
