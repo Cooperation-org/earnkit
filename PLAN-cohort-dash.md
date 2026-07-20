@@ -112,8 +112,10 @@ by playbook run (config changes don't ride the git-push CI).
 4. **DONE 2026-07-19 — Odoo module upgrade path**:
    `playbooks/upgrade-crm-addons.yml` →
    `roles/odoo/tasks/upgrade-addons.yml`. Discovers team DBs at runtime
-   (`pg_database` matching `^crm-[a-z0-9-]+_vc$`; never a hardcoded
-   list; base `crm_vc` deliberately excluded) and runs odoo-bin
+   (`pg_database` matching `^crm-[a-z0-9-]+$` AND owned by
+   `odoo_db_user` — the owner check keeps unrelated same-named DBs on
+   the shared cluster out; updated 2026-07-20 for the `_vc`-suffix
+   revert) and runs odoo-bin
    `-u {{ odoo_upgrade_modules }}` (defaults to every custom addon;
    `-e odoo_upgrade_modules=crm_outreach_runner` narrows) with
    `--stop-after-init --no-http` on each. One command; safe to re-run.

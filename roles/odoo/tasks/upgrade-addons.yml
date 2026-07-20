@@ -4,11 +4,12 @@
 # include_role: odoo with tasks_from: upgrade-addons).
 #
 # Source of truth for the team list is the databases themselves: every team
-# database matches crm-<team_slug>_vc (created by playbooks/add-team.yml;
-# dbfilter in odoo.conf is ^%d_vc$) — discovered at runtime, never a
-# hardcoded list. The base crm_vc database (the crm.<domain> vhost) is NOT a
-# team database and is deliberately not matched — extend the pattern only if
-# that decision changes. Safe to re-run: odoo-bin -u reloads each module's data
+# database is crm-<team_slug> (created by playbooks/add-team.yml; dbfilter in
+# odoo.conf is ^%d$, so crm-<slug>.<domain> maps 1:1 to its database) —
+# discovered at runtime, never a hardcoded list. The Postgres cluster is
+# SHARED with unrelated projects, so the name pattern alone is not enough:
+# discovery also requires the database to be OWNED by this install's
+# {{ odoo_db_user }} role, which only add-team.yml creates databases as. Safe to re-run: odoo-bin -u reloads each module's data
 # against its current source and converges; running Odoo workers pick up the
 # new registry via the base_registry_signaling sequence, so no restart is
 # needed.
@@ -21,9 +22,13 @@
     login_password: "{{ odoo_db_password }}"
     db: postgres
     query: >
-      SELECT datname FROM pg_database
-      WHERE datname ~ '^crm-[a-z0-9-]+_vc$'
-      ORDER BY datname
+      SELECT d.datname FROM pg_database d
+      JOIN pg_roles r ON r.oid = d.datdba
+      WHERE r.rolname = %(owner)s
+        AND d.datname ~ '^crm-[a-z0-9-]+$'
+      ORDER BY d.datname
+    named_args:
+      owner: "{{ odoo_db_user }}"
   register: odoo_team_dbs
   changed_when: false
 
