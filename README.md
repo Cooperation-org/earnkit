@@ -57,9 +57,13 @@ ansible-playbook -i /path/to/private/inventory/hosts.yml playbooks/add-team.yml 
   -e team_slug=sunrise -e team_name="Sunrise Co-op"
 
 # 5) once invites are accepted, sync members: every GovKit member of each team
-#    gets an internal, LinkedTrust-linked user in the team CRM and a membership
-#    in the team's Taiga project. Idempotent — run after add-team and again
-#    whenever membership changes:
+#    gets an internal, LinkedTrust-linked user in the team CRM (needs their
+#    LinkedTrust sub, i.e. one GovKit login) and an email-matched user +
+#    membership in the team's Taiga project. Idempotent — run after add-team
+#    and again whenever membership changes.
+#    CAVEAT: Taiga login matches by email only, so a member whose GovKit email
+#    differs from their LinkedTrust email gets a DUPLICATE Taiga user at first
+#    login — keep the two emails aligned.
 ansible-playbook -i /path/to/private/inventory/hosts.yml playbooks/sync-team-members.yml
 ```
 

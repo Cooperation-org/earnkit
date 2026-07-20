@@ -6,14 +6,20 @@
 #            {{ odoo_member_group_xmlids }} and linked to their LinkedTrust
 #            identity (auth_oauth matches on oauth_uid = the OIDC sub, so the
 #            pre-created user IS the one their login resolves to).
-#   * Taiga: a user + AuthData(key='linkedtrust', value=sub) + a Membership in
-#            the team's project — the same rows the LinkedTrust auth plugin
-#            would converge to at first login (see the script's docstring).
+#   * Taiga: a user + a Membership in the team's project, matched STRICTLY by
+#            email — the same one rule django-linkedtrust-auth's taiga_adapter
+#            (LINKEDTRUST_USER_HANDLER in roles/taiga config.py.j2) applies at
+#            login, so sync and first login converge on the same user. Caveat:
+#            if a member's GovKit email differs from their LinkedTrust email,
+#            first login creates a duplicate Taiga user — keep them aligned.
 #
-# Source of truth for WHO: GovKit memberships (orgs_membership -> accounts_user;
-# the LinkedTrust sub is accounts_user.auth_provider_id where
-# auth_provider='linkedtrust'). Members who have not yet signed into GovKit
-# with LinkedTrust have no sub and are reported + skipped — re-run later.
+# Source of truth for WHO: GovKit memberships (orgs_membership -> accounts_user).
+# Per-system requirements differ: Taiga needs only the member's email; Odoo
+# also needs the LinkedTrust sub (accounts_user.auth_provider_id where
+# auth_provider='linkedtrust') because auth_oauth matches on oauth_uid.
+# Members without a sub (never signed into GovKit via LinkedTrust) are
+# reported and skipped FOR THE CRM ONLY — Taiga still syncs them; re-run
+# after they log in to complete the CRM side.
 #
 # Source of truth for WHICH TEAMS: the crm-<slug> databases owned by
 # {{ odoo_db_user }} (discovered at runtime, never a hardcoded list),
@@ -83,8 +89,9 @@
              | intersect(govkit_members.query_result
                          | map(attribute='org_slug') | unique | list)
              | sort }}
-        # Provisionable = the member has a LinkedTrust subject. Without it
-        # there is nothing to link an OIDC login to — no email guessing.
+        # CRM-provisionable = the member has a LinkedTrust subject. Without it
+        # there is nothing for auth_oauth's oauth_uid match to link — no email
+        # guessing in Odoo. (Taiga needs no sub: its adapter matches by email.)
         sync_linked: >-
           {{ govkit_members.query_result
              | selectattr('auth_provider', 'equalto', 'linkedtrust')
@@ -102,12 +109,14 @@
              | unique | list | difference(sync_team_slugs) }}
       when: orphan_orgs | length > 0
 
-    - name: "Report: members without a LinkedTrust identity yet (skipped)"
+    - name: "Report: members without a LinkedTrust identity yet (CRM skipped)"
       ansible.builtin.debug:
         msg: >-
           No LinkedTrust subject in GovKit for
           {{ unlinked | map(attribute='email') | join(', ') }} — they have not
-          signed into GovKit with LinkedTrust yet. Re-run after they do.
+          signed into GovKit with LinkedTrust yet, so no CRM user can be
+          linked for them (Taiga is still synced by email). Re-run after
+          they log in.
       vars:
         unlinked: >-
           {{ govkit_members.query_result
@@ -143,9 +152,11 @@
       changed_when: "'changed:' in odoo_sync.stdout"
       failed_when: odoo_sync.rc != 0 or 'SYNC-RESULT ok' not in odoo_sync.stdout
 
-    # ---- Taiga: user + LinkedTrust AuthData + project membership -----------
+    # ---- Taiga: user (email-matched) + project membership ------------------
     # Same manage.py shell pattern as add-team.yml's project task (piped
     # stdin instead of -c so the member data never needs shell quoting).
+    # ALL active members sync here — the taiga adapter needs an email, not a
+    # LinkedTrust sub.
     - name: "Taiga: sync members into project <slug>"
       ansible.builtin.command:
         argv:
@@ -155,7 +166,7 @@
         stdin: "{{ lookup('template', 'sync-members-taiga.py.j2') }}"
       vars:
         sync_org_slug: "{{ item }}"
-        sync_members: "{{ sync_linked | selectattr('org_slug', 'equalto', item) | list }}"
+        sync_members: "{{ govkit_members.query_result | selectattr('org_slug', 'equalto', item) | list }}"
       loop: "{{ sync_team_slugs }}"
       become_user: taiga
       register: taiga_sync

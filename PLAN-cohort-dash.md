@@ -131,12 +131,17 @@ by playbook run (config changes don't ride the git-push CI).
    `sales_team.group_sale_salesman_all_leads`), linked by
    `oauth_uid=<sub>` on the LinkedTrust provider row so stock
    auth_oauth resolves the first OIDC login to the pre-created user;
-   and a Taiga user + `AuthData(key='linkedtrust', value=<sub>)` +
-   project `Membership` with `taiga_member_role_slug` — mirroring
-   `linkedtrust_register()` in taiga-contrib-linkedtrust-auth so sync
-   and login converge on the same user (no emails sent). Members with
-   no LT sub yet (never signed into GovKit via LinkedTrust) are
-   reported and skipped; never downgrades, deactivates, or relinks a
+   and a Taiga user + project `Membership` with
+   `taiga_member_role_slug`, matched STRICTLY by email — the same one
+   rule as django-linkedtrust-auth's `taiga_adapter.get_or_create_user`
+   (the `LINKEDTRUST_USER_HANDLER` since the 2026-07-20 auth switch,
+   19498ac), same create conventions, no emails sent. KNOWN FAILURE
+   MODE of email matching: a member whose GovKit email differs from
+   their LinkedTrust email gets a duplicate Taiga user at first login —
+   the sync cannot prevent it; keep the two aligned. Members with no
+   LT sub yet (never signed into GovKit via LinkedTrust) are reported
+   and skipped for the CRM only — Taiga needs just the email; never
+   downgrades, deactivates, or relinks a
    different sub. Per DECISIONS.md #6 this is the operator-run
    reconcile until amebo's member provisioning covers CRM + Taiga.
    Follow-up noted, not done: write the created Taiga ids back to

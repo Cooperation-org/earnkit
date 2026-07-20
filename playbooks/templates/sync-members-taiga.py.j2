@@ -2,31 +2,34 @@
 # stdin (Django exec()s piped stdin). Member data is b64-encoded JSON so no
 # email or name ever needs shell/python quoting.
 #
-# Identity contract: this mirrors linkedtrust_register() in
-# taiga-contrib-linkedtrust-auth (back/.../services.py) — the association is
-# users.AuthData(key='linkedtrust', value=<OIDC sub>), with the plugin's own
-# match-existing-account-by-email fallback — so a member provisioned here and
-# one who logs in first converge on the SAME user. Unlike the plugin it sends
-# no registration email (bulk sync must be silent).
+# Identity contract: mirrors get_or_create_user() in django-linkedtrust-auth's
+# linkedtrust_auth/taiga_adapter.py — the LINKEDTRUST_USER_HANDLER wired in
+# roles/taiga/templates/config.py.j2. That adapter finds-or-creates STRICTLY
+# by email (User.objects.get(email__iexact=...); no AuthData, no OIDC sub), so
+# this sync applies the same one rule with the same create conventions:
+# username from the email local part ('.'/'+' -> '_', 24 chars, _N dedup),
+# verified_email=True, email_token=uuid4, new_email, read_new_terms=True,
+# unusable password. A member synced here and one who logs in first therefore
+# converge on the SAME user — as long as their GovKit email and LinkedTrust
+# email match (if they differ, first login creates a duplicate; email matching
+# cannot prevent that — keep the two aligned).
 #
-# Idempotent: creates or links only. Never changes an existing membership's
-# role or is_admin, never removes anything, never rebinds a user who already
-# carries a DIFFERENT LinkedTrust subject.
+# Idempotent: creates or attaches only. Never changes an existing membership's
+# role or is_admin, never removes anything. No emails are sent (the adapter
+# sends none either).
 import base64
 import json
 import sys
+import uuid
 
 from django.apps import apps
 from django.db import transaction
-
-from taiga.base.utils.slug import slugify_uniquely
 
 members = json.loads(base64.b64decode("{{ sync_members | to_json | b64encode }}"))
 org_slug = json.loads(base64.b64decode("{{ sync_org_slug | to_json | b64encode }}"))
 role_slug = json.loads(base64.b64decode("{{ taiga_member_role_slug | default('back') | to_json | b64encode }}"))
 
 User = apps.get_model("users", "User")
-AuthData = apps.get_model("users", "AuthData")
 Project = apps.get_model("projects", "Project")
 Membership = apps.get_model("projects", "Membership")
 
@@ -47,28 +50,33 @@ if role is None:
 changed = 0
 with transaction.atomic():
     for m in members:
-        email = m["email"]
-        sub = m["auth_provider_id"]
-        auth = AuthData.objects.filter(key="linkedtrust", value=sub).first()
-        if auth is not None:
-            user = auth.user
-        else:
-            user = User.objects.filter(email__iexact=email).first()
-            if user is not None and AuthData.objects.filter(
-                    user=user, key="linkedtrust").exclude(value=sub).exists():
-                print("skip: %s already carries a different LinkedTrust "
-                      "subject — not rebinding" % email)
-                continue
-            if user is None:
-                username = slugify_uniquely(email.split("@")[0], User,
-                                            slugfield="username")
-                user = User.objects.create(email=email, username=username,
-                                           full_name=m.get("display_name") or email)
-                print("changed: created taiga user %s" % email)
-                changed += 1
-            AuthData.objects.create(user=user, key="linkedtrust",
-                                    value=sub, extra={})
-            print("changed: linked %s to their LinkedTrust subject" % email)
+        # Same normalization as the adapter (it lowercases the OIDC email).
+        email = (m["email"] or "").strip().lower()
+        if not email:
+            print("skip: member row without an email — nothing to match on")
+            continue
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            # Create conventions copied from taiga_adapter.get_or_create_user.
+            base_username = email.split("@")[0].replace(".", "_").replace("+", "_")[:24]
+            username = base_username
+            suffix = 1
+            while User.objects.filter(username__iexact=username).exists():
+                username = "%s_%d" % (base_username, suffix)
+                suffix += 1
+            user = User(
+                username=username,
+                email=email,
+                full_name=m.get("display_name") or email.split("@")[0],
+                verified_email=True,
+                email_token=str(uuid.uuid4()),
+                new_email=email,
+                read_new_terms=True,
+            )
+            user.set_unusable_password()
+            user.save()
+            print("changed: created taiga user %s" % email)
             changed += 1
         if Membership.objects.filter(project=project, user=user).exists():
             continue
