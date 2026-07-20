@@ -183,7 +183,7 @@ workersvc_db_user: workersvc_VMNAME
 workersvc_db_password: "VAULT-ME"
 workersvc_secret_key: "VAULT-ME"
 # GovKit org whose invites the doorway resolves:
-workersvc_govkit_org_slug: workersvc
+workersvc_govkit_org_slug: vc
 # Where "go to your dashboard" points after joining — the apex cohort dash is
 # the front door (GovKit at dash.* stays the expand target, not the landing):
 workersvc_dashboard_url: "https://{{ workersvc_domain }}/dash/"
