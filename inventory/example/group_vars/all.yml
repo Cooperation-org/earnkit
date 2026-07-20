@@ -155,6 +155,11 @@ govkit_cors_origins: "https://{{ workersvc_domain }}"
 # PLAN-cohort-dash.md item 6). Empty keeps next= same-site only:
 govkit_login_next_allowed_hosts: "{{ workersvc_domain }}"
 
+# Front door GovKit sends members through to connect with a team: URL template
+# for the per-org connect page on the apex. {org_slug} is substituted by
+# govkit itself — keep it literal (single braces are not jinja):
+govkit_cohort_front_door: "https://{{ workersvc_domain }}/dash/{org_slug}/connect/"
+
 # ---------------------------------------------------------------------------
 # workersvc (Workers.vc public face) — from source
 # ---------------------------------------------------------------------------
