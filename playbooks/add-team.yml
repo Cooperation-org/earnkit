@@ -130,6 +130,35 @@
       become_user: odoo
       when: odoo_db.changed
 
+    # Optional: hand the team's founder their admin invite in the same run.
+    # Pass -e founder_name='Full Name' (and optionally founder_email=...);
+    # the play output ends with the one link to send them.
+    - name: "GovKit: mint founder admin invite for {{ founder_name | default('') }}"
+      ansible.builtin.command:
+        argv:
+          - /opt/govkit/venv/bin/python
+          - /opt/govkit/src/manage.py
+          - mint_invite
+          - "{{ team_slug }}"
+          - --name
+          - "{{ founder_name }}"
+          - --email
+          - "{{ founder_email | default('') }}"
+          - --role
+          - admin
+          - --audience
+          - founder
+      args:
+        chdir: /opt/govkit/src
+      become_user: govkit
+      register: founder_invite
+      when: founder_name is defined
+
+    - name: "Founder invite link (send this to them)"
+      ansible.builtin.debug:
+        msg: "{{ founder_invite.stdout_lines | last }}"
+      when: founder_name is defined
+
     # ---- Taiga: one private project per team ------------------------------
     - name: "Taiga: private project {{ team_slug }}"
       ansible.builtin.shell: |
