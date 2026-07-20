@@ -29,14 +29,18 @@ taiga_front_repo: https://github.com/taigaio/taiga-front-dist.git
 
 # LinkedTrust auth plugin — pinned by commit (the repo has no release tags yet).
 # Bump the commit AND the check in tasks/back.yml notes when updating.
-taiga_linkedtrust_plugin_repo: https://github.com/Cooperation-org/taiga-contrib-linkedtrust-auth.git
-taiga_linkedtrust_plugin_version: dde1dc141a6012c205d145f40ed608d4db082759
+taiga_linkedtrust_plugin_repo: https://github.com/Cooperation-org/django-linkedtrust-auth.git
+taiga_linkedtrust_plugin_version: main
 
 # OAuth redirect the IdP sends the browser back to after login. Stock
 # taiga-front has no LinkedTrust button (the plugin repo ships only the back
 # half); Marten is the login frontend — override this in group_vars to
 # "https://{{ marten_domain }}/oauth/callback" when Marten serves the button.
-taiga_oidc_redirect_uri: "https://{{ taiga_domain }}/oauth/callback"
+# The plugin derives its own callback (/api/v1/auth/linkedtrust/callback) from
+# the request, so there is no redirect_uri var. This is where the browser is
+# sent AFTER login — Marten is the frontend:
+taiga_linkedtrust_frontend_url: "https://{{ marten_domain }}"
+taiga_linkedtrust_frontend_callback: "/oauth/callback"
 
 # Loopback binds fanned out by nginx on {{ taiga_http_port }}.
 taiga_back_bind: 127.0.0.1

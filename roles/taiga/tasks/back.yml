@@ -53,21 +53,34 @@
 # pip reinstalls VCS requirements on every run, so guard with a presence
 # check to stay idempotent. NOTE: bumping taiga_linkedtrust_plugin_version
 # only takes effect if the plugin's setup.py version also changes — for a
-# same-version bump, `pip uninstall taiga-contrib-linkedtrust-auth` on the
+# same-version bump, `pip uninstall django-linkedtrust-auth` on the
 # host (or remove the venv) and re-run.
 - name: Check whether the LinkedTrust auth plugin is installed
-  ansible.builtin.command: "{{ taiga_venv }}/bin/pip show --quiet taiga-contrib-linkedtrust-auth"
+  ansible.builtin.command: "{{ taiga_venv }}/bin/pip show --quiet django-linkedtrust-auth"
   register: taiga_lt_plugin_check
   changed_when: false
   failed_when: false
 
 - name: Install LinkedTrust auth plugin (pinned commit)
   ansible.builtin.pip:
-    name: "git+{{ taiga_linkedtrust_plugin_repo }}@{{ taiga_linkedtrust_plugin_version }}#subdirectory=back"
+    name: "git+{{ taiga_linkedtrust_plugin_repo }}@{{ taiga_linkedtrust_plugin_version }}"
     virtualenv: "{{ taiga_venv }}"
   become: true
   become_user: "{{ taiga_user }}"
   when: taiga_lt_plugin_check.rc != 0
+  notify:
+    - Restart taiga-back
+    - Restart taiga-async
+
+# taiga-back stays EXACTLY upstream; the plugin's routes are appended in a local
+# ROOT_URLCONF instead of patching taiga/urls.py.
+- name: Render taiga-back root URLconf (settings/urls.py)
+  ansible.builtin.template:
+    src: urls.py.j2
+    dest: "{{ taiga_back_dir }}/settings/urls.py"
+    owner: "{{ taiga_user }}"
+    group: "{{ taiga_group }}"
+    mode: "0644"
   notify:
     - Restart taiga-back
     - Restart taiga-async

@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+# Local ROOT_URLCONF: stock taiga-back URLs + the LinkedTrust auth plugin.
+#
+# taiga-back is kept EXACTLY as upstream (taigaio/taiga-back, pinned tag) — no
+# core file is patched. Django lets us point ROOT_URLCONF at this module
+# instead, so the plugin's routes are appended here rather than inside
+# taiga/urls.py. Set in settings/config.py: ROOT_URLCONF = "settings.urls".
+from django.urls import include, path
+
+from taiga.urls import urlpatterns as taiga_urlpatterns
+from taiga.urls import handler500  # noqa: F401 — Django resolves it on the root urlconf
+
+urlpatterns = taiga_urlpatterns + [
+    # Marten's login button hits {API_BASE}/auth/linkedtrust/redirect, i.e.
+    # https://{{ taiga_domain }}/api/v1/auth/linkedtrust/redirect
+    path("api/v1/auth/linkedtrust/", include("linkedtrust_auth.urls")),
+]

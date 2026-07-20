@@ -104,12 +104,23 @@ ENABLE_TELEMETRY = False
 
 #########################################
 # LINKEDTRUST AUTH PLUGIN
-# (Cooperation-org/taiga-contrib-linkedtrust-auth, back half)
+# (Cooperation-org/django-linkedtrust-auth — server-side OIDC flow)
 #########################################
 
-INSTALLED_APPS += ["taiga_contrib_linkedtrust_auth"]
+INSTALLED_APPS += ["linkedtrust_auth"]
+
+# Routes live at /api/v1/auth/linkedtrust/{redirect,callback}. taiga-back stays
+# stock upstream: settings/urls.py appends the plugin's URLs to taiga's.
+ROOT_URLCONF = "settings.urls"
 
 LINKEDTRUST_URL = "{{ oidc_issuer }}"
 LINKEDTRUST_CLIENT_ID = "{{ taiga_oidc_client_id }}"
 LINKEDTRUST_CLIENT_SECRET = "{{ taiga_oidc_client_secret }}"
-LINKEDTRUST_REDIRECT_URI = "{{ taiga_oidc_redirect_uri }}"
+
+# Marten is the frontend. After login the plugin 302s the browser to
+# <FRONTEND_URL><FRONTEND_CALLBACK>#auth_token=...&refresh=...
+LINKEDTRUST_FRONTEND_URL = "{{ taiga_linkedtrust_frontend_url }}"
+LINKEDTRUST_FRONTEND_CALLBACK = "{{ taiga_linkedtrust_frontend_callback }}"
+
+# Find-or-creates the Taiga user and mints Taiga's own tokens.
+LINKEDTRUST_USER_HANDLER = "linkedtrust_auth.taiga_adapter.get_or_create_user"
