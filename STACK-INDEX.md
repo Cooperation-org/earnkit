@@ -14,7 +14,7 @@ this file lives in earnkit because earnkit is the composition.
 | `amebo.workers.vc` | amebo backend (+ `/embed/amebo.js`) | Cooperation-org/amebo | 127.0.0.1:8000 |
 | `taiga.workers.vc` | Taiga (API + events + static) | taiga-back/-front (upstream) | 127.0.0.1:8080 |
 | `marten.workers.vc` | Marten (SvelteKit static Taiga frontend) | Cooperation-org/marten | nginx static `/opt/marten/src/build` |
-| `crm.workers.vc`, `crm-<team>.workers.vc` | Odoo 17 CRM, one DB per team (`crm[-<team>]_vc`, dbfilter `^%d_vc$`) | odoo + crm-card-scanner + crm-outreach-runner | 127.0.0.1:8069 (ws 8072) |
+| `crm-<team>.workers.vc` | Odoo 17 CRM, one DB per team (`crm-<team>`, dbfilter `^%d$`; no bare `crm.` host) | odoo + crm-card-scanner + crm-outreach-runner | 127.0.0.1:8069 (ws 8072) |
 | `live.linkedtrust.us` | OIDC IdP for every app + the claims backend (`LT_API`) | (LinkedTrust) | external |
 | `amebo.linkedtrust.us` / `api.amebo.linkedtrust.us` | LinkedTrust's own amebo (reference frontend: key-links bar + campaigns board) | same amebo repo | external |
 | `demos.linkedtrust.us/workersvc-design/dashboard.html` | v3 cohort-dash design spec (static) | — | external |
@@ -74,7 +74,7 @@ Known gaps: register tab calls a method that doesn't exist (throws), dead client
 ## earnkit — composition (this repo)
 
 - `site.yml`: base → rabbitmq → taiga → marten → odoo → amebo → govkit → workersvc → nginx → cicd. All state on external Postgres (`database_host`).
-- `playbooks/add-team.yml -e team_slug=… -e team_name=…` — per-team: Odoo DB `crm-<slug>_vc` + modules + OIDC row + Caddy route, Taiga private project (slug=team), amebo instance row + org provision (S2S), GovKit org. People are NEVER provisioned here — that's amebo's job via GovKit accept.
+- `playbooks/add-team.yml -e team_slug=… -e team_name=…` — per-team: Odoo DB `crm-<slug>` + modules + OIDC row + Caddy route, Taiga private project (slug=team), amebo instance row + org provision (S2S), GovKit org. People are NEVER provisioned here — that's amebo's job via GovKit accept.
 - CI/CD: each app repo's `deploy-to-cohort.yml` → ssh `deploy` user → `sudo /opt/earnkit/bin/update-{workersvc,govkit,amebo,marten}` (reset to origin/main, deps, migrate, restart). Taiga/Odoo update by playbook re-run only.
 - docs: DECISIONS.md (hostname scheme, per-service multitenancy, no docker), SSO-AND-TEAMS.md (identity = OIDC sub; membership sync partly unbuilt; launch-gate notes).
 - KNOWN ISSUE: the real inventory commits live secrets in plaintext, against its own rule.
@@ -83,7 +83,7 @@ Known gaps: register tab calls a method that doesn't exist (throws), dead client
 
 1. **Walk-up join**: `/commit/` → claim on LinkedTrust → pending → admin approves (approval claim) → wall.
 2. **THE invite flow — there is exactly one**: GovKit members page mints → share `workers.vc/i/<code>/` → join page prefilled (**mentors: calendar prompt here**; their words, image/video) → commit = auto-approved wall entry + claim reported to GovKit → GovKit accept step, now zero-friction: signed-in joins instantly; anonymous gets the door — "Count me in" creates the account from the invite email (or typed), no OAuth; existing email routes through sign-in; link possession never unlocks an existing account. Founder invites spawn the venture org + checklist on accept; amebo provisions the member across tools. Invites are revocable until accepted; an existing member opening a link (inviter previewing) never consumes it. Login is optional by design — the inviter's trust is the gate.
-3. **Team provisioning**: add-team.yml (see above). Org slug is the tenant key everywhere (GovKit org, amebo org, Taiga project slug, `crm-<slug>` host / `crm-<slug>_vc` DB).
+3. **Team provisioning**: add-team.yml (see above). Org slug is the tenant key everywhere (GovKit org, amebo org, Taiga project slug, `crm-<slug>` host and DB).
 4. **SSO**: LinkedTrust OIDC on every app (currently one shared client id). Sessions are per-app (GovKit Django cookie, amebo JWT, Taiga JWT, Odoo session); one IdP session makes the per-app logins quiet.
 5. **Cohort dash** (`workers.vc/dash/`): read-only cards, each owned by its app via web components + credentialed CORS — the whole contract is in the six `PLAN-cohort-dash.md` files.
 6. **Deploys**: push to main → auto-deploy (workersvc/govkit/amebo/marten); env/config and Odoo/Taiga → ansible.

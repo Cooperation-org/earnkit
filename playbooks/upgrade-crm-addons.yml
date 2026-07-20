@@ -1,7 +1,7 @@
 ---
 # earnkit — upgrade the custom CRM addons across ALL team databases in one
 # command (the PLAN-cohort-dash.md odoo upgrade path). Team databases are
-# discovered at runtime from Postgres (every crm-<team_slug>_vc database) —
+# discovered at runtime from Postgres (every crm-<team_slug> database) —
 # never a hardcoded list. Run after the custom-addon checkouts update (a re-run
 # of the odoo role, or a git pull under /opt/odoo/custom-addons/).
 #
