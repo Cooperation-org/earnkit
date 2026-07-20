@@ -1,0 +1,9 @@
+---
+# earnkit-runner — localhost service that executes add-team.yml on request
+# (amebo triggers it when a GovKit founder accept creates a new venture org).
+runner_user: earnkit-runner
+runner_port: 8946
+runner_state_dir: /var/lib/earnkit-runner
+# runner_token has NO default: set it in the private inventory
+# (python3 -c "import secrets; print(secrets.token_urlsafe(32))") — the same
+# value lands in amebo's env as TEAM_RUNNER_TOKEN.

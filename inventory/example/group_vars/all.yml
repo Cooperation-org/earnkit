@@ -219,3 +219,11 @@ deploy_authorized_keys: []
 # repos readable by the VM's root ssh key (deploy key per repo) or use https
 # URLs with a token. Operator's choice; document what you did in your private
 # inventory.
+
+# ---- earnkit-runner (roles/runner) ------------------------------------------
+# Localhost service on the cohort VM that executes add-team.yml when amebo asks
+# (GovKit founder accept -> new venture org -> full team stack, no operator).
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+# The amebo role reads the same var to hand amebo TEAM_RUNNER_URL/TOKEN.
+runner_token: "VAULT-ME"
+# runner_port: 8946

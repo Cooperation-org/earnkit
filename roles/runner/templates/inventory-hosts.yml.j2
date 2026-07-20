@@ -1,0 +1,10 @@
+---
+# VM-local inventory for the earnkit-runner: add-team.yml runs on THIS host
+# (connection local), same 'cohort' group name the operator playbooks target.
+all:
+  children:
+    cohort:
+      hosts:
+        localhost:
+          ansible_connection: local
+          ansible_python_interpreter: /opt/earnkit/ansible-venv/bin/python

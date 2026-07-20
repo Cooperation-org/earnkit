@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# run-add-team <team_slug> <team_name>
+#
+# The ONLY thing the earnkit-runner service may sudo (see
+# /etc/sudoers.d/earnkit-runner): execute add-team.yml locally with exactly two
+# operator-shaped variables. Everything else the playbook needs (DB hosts,
+# secrets) comes from the VM-local inventory the runner role installed at
+# /opt/earnkit/stack/inventory-local (root-only). Re-validates its inputs even
+# though the service already did — sudo boundary, trust nothing.
+set -euo pipefail
+
+STACK=/opt/earnkit/stack
+VENV=/opt/earnkit/ansible-venv
+
+if [ "$#" -ne 2 ]; then
+    echo "usage: run-add-team <team_slug> <team_name>" >&2
+    exit 2
+fi
+slug=$1
+name=$2
+
+if ! [[ "$slug" =~ ^[a-z0-9][a-z0-9-]{1,30}$ ]]; then
+    echo "refusing team_slug '$slug' (want [a-z0-9][a-z0-9-]{1,30})" >&2
+    exit 2
+fi
+if [ "${#name}" -lt 2 ] || [ "${#name}" -gt 255 ]; then
+    echo "refusing team_name (want 2-255 characters)" >&2
+    exit 2
+fi
+
+# Arbitrary display names (spaces, quotes) go to ansible as a JSON vars file,
+# never through shell or YAML interpolation.
+extra_vars=$(mktemp /tmp/add-team-vars.XXXXXX.json)
+trap 'rm -f "$extra_vars"' EXIT
+TEAM_SLUG="$slug" TEAM_NAME="$name" python3 - "$extra_vars" <<'PY'
+import json, os, sys
+with open(sys.argv[1], "w") as f:
+    json.dump({"team_slug": os.environ["TEAM_SLUG"],
+               "team_name": os.environ["TEAM_NAME"]}, f)
+PY
+
+export ANSIBLE_CONFIG="$STACK/ansible.cfg"
+export ANSIBLE_COLLECTIONS_PATH=/opt/earnkit/collections
+exec "$VENV/bin/ansible-playbook" \
+    -i "$STACK/inventory-local" \
+    "$STACK/playbooks/add-team.yml" \
+    -e "@$extra_vars"

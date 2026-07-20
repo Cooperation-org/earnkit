@@ -1,0 +1,22 @@
+---
+# Rendered by the runner role from the OPERATOR'S private inventory at deploy
+# time — exactly the variables add-team.yml consumes, nothing else. Root-only
+# (0600): this file carries live credentials. Re-run the runner role after
+# rotating any of these.
+database_host: {{ database_host | to_json }}
+database_port: {{ database_port | to_json }}
+database_admin_user: {{ database_admin_user | to_json }}
+database_admin_password: {{ database_admin_password | to_json }}
+odoo_db_user: {{ odoo_db_user | to_json }}
+odoo_team_init_modules: {{ odoo_team_init_modules | default('base,crm,auth_oauth') | to_json }}
+odoo_oidc_client_id: {{ odoo_oidc_client_id | to_json }}
+oidc_issuer: {{ oidc_issuer | to_json }}
+cohort_domain: {{ cohort_domain | to_json }}
+amebo_api_port: {{ amebo_api_port | to_json }}
+amebo_s2s_token: {{ amebo_s2s_token | to_json }}
+amebo_db_name: {{ amebo_db_name | to_json }}
+amebo_db_user: {{ amebo_db_user | to_json }}
+amebo_db_password: {{ amebo_db_password | to_json }}
+caddy_api_host: {{ caddy_api_host | default('') | to_json }}
+caddy_api_port: {{ caddy_api_port | default('') | to_json }}
+caddy_api_token: {{ caddy_api_token | default('') | to_json }}

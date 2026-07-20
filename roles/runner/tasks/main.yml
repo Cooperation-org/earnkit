@@ -1,0 +1,139 @@
+---
+# earnkit-runner: the machine-triggered doorway into add-team.yml.
+# amebo POSTs {team_slug, team_name} (see its team_stack_runner.py) when a
+# GovKit founder accept creates a brand-new venture org; the runner executes
+# the playbook LOCALLY (ansible-local) with the same private variables the
+# operator would use, serialized one job at a time. Runs as an unprivileged
+# user whose only privilege is the sudo-whitelisted wrapper.
+- name: runner_token must be set (private inventory)
+  ansible.builtin.assert:
+    that:
+      - runner_token is defined
+      - runner_token | length >= 24
+    fail_msg: >-
+      Set runner_token in the private inventory (python3 -c "import secrets;
+      print(secrets.token_urlsafe(32))"). The same value feeds amebo's
+      TEAM_RUNNER_TOKEN (amebo role reads runner_token too).
+
+- name: packages for the local ansible run
+  ansible.builtin.apt:
+    name: [python3-venv, rsync]
+    state: present
+
+- name: runner user
+  ansible.builtin.user:
+    name: "{{ runner_user }}"
+    system: true
+    home: "{{ runner_state_dir }}"
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /opt/earnkit/bin, mode: "0755" }
+    - { path: /opt/earnkit/stack, mode: "0755" }
+    # excluded from the sync below, so --delete never removes it
+    - { path: /opt/earnkit/stack/inventory-local, mode: "0755" }
+    - { path: /opt/earnkit/stack/inventory-local/group_vars, mode: "0755" }
+    - { path: /opt/earnkit/collections, mode: "0755" }
+    - { path: "{{ runner_state_dir }}", owner: "{{ runner_user }}", mode: "0750" }
+    - { path: "{{ runner_state_dir }}/jobs", owner: "{{ runner_user }}", mode: "0750" }
+
+# The stack the wrapper executes = this repo checkout, pinned at deploy time.
+# NEVER the inventory (the VM-local one is rendered below, with only what
+# add-team needs) and never git metadata.
+- name: copy the earnkit stack to the VM
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../"
+    dest: /opt/earnkit/stack/
+    delete: true
+    rsync_opts:
+      - "--exclude=.git"
+      - "--exclude=inventory"
+      - "--exclude=inventory-local"
+      - "--chmod=D0755,F0644"
+
+- name: VM-local inventory (localhost, cohort group)
+  ansible.builtin.template:
+    src: inventory-hosts.yml.j2
+    dest: /opt/earnkit/stack/inventory-local/hosts.yml
+    mode: "0644"
+  notify: restart earnkit-runner
+
+- name: VM-local group_vars (credentials add-team needs — root only)
+  ansible.builtin.template:
+    src: inventory-group-vars.yml.j2
+    dest: /opt/earnkit/stack/inventory-local/group_vars/cohort.yml
+    mode: "0600"
+  notify: restart earnkit-runner
+
+- name: ansible venv for local runs
+  ansible.builtin.pip:
+    name:
+      - ansible-core>=2.16
+      - psycopg2-binary
+    virtualenv: /opt/earnkit/ansible-venv
+    virtualenv_command: python3 -m venv
+
+- name: collections for the local runs
+  ansible.builtin.command:
+    argv:
+      - /opt/earnkit/ansible-venv/bin/ansible-galaxy
+      - collection
+      - install
+      - -r
+      - /opt/earnkit/stack/requirements.yml
+      - -p
+      - /opt/earnkit/collections
+  register: galaxy
+  changed_when: "'Installing' in galaxy.stdout"
+
+- name: runner service script
+  ansible.builtin.copy:
+    src: earnkit_runner.py
+    dest: /opt/earnkit/bin/earnkit-runner.py
+    mode: "0755"
+  notify: restart earnkit-runner
+
+- name: add-team wrapper (the one sudo-whitelisted command)
+  ansible.builtin.copy:
+    src: run-add-team
+    dest: /opt/earnkit/bin/run-add-team
+    mode: "0755"
+
+- name: sudoers — runner may run exactly the wrapper
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/earnkit-runner
+    mode: "0440"
+    validate: visudo -cf %s
+    content: |
+      {{ runner_user }} ALL=(root) NOPASSWD: /opt/earnkit/bin/run-add-team
+
+- name: runner environment
+  ansible.builtin.copy:
+    dest: /etc/earnkit-runner.env
+    mode: "0600"
+    content: |
+      RUNNER_TOKEN={{ runner_token }}
+      RUNNER_PORT={{ runner_port }}
+      RUNNER_STATE_DIR={{ runner_state_dir }}
+  notify: restart earnkit-runner
+
+- name: systemd unit
+  ansible.builtin.template:
+    src: earnkit-runner.service.j2
+    dest: /etc/systemd/system/earnkit-runner.service
+    mode: "0644"
+  notify: restart earnkit-runner
+
+- name: earnkit-runner enabled and running
+  ansible.builtin.systemd_service:
+    name: earnkit-runner
+    enabled: true
+    state: started
+    daemon_reload: true

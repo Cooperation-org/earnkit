@@ -14,5 +14,6 @@
     - { role: amebo,    tags: [amebo] }
     - { role: govkit,   tags: [govkit] }
     - { role: workersvc, tags: [workersvc] }
+    - { role: runner,   tags: [runner] }
     - { role: nginx,    tags: [nginx] }
     - { role: cicd,     tags: [cicd] }

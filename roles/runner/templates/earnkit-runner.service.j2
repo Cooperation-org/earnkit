@@ -1,0 +1,20 @@
+[Unit]
+Description=earnkit-runner (add-team.yml on request from amebo)
+After=network.target
+
+[Service]
+User={{ runner_user }}
+Group={{ runner_user }}
+EnvironmentFile=/etc/earnkit-runner.env
+ExecStart=/usr/bin/python3 /opt/earnkit/bin/earnkit-runner.py
+Restart=always
+RestartSec=5
+# Hardening within what the job needs: the service itself only writes its state
+# dir and calls the one sudo-whitelisted wrapper (so NoNewPrivileges must stay
+# off; the sudoers file is the actual boundary).
+ProtectHome=true
+PrivateTmp=false
+ReadWritePaths={{ runner_state_dir }}
+
+[Install]
+WantedBy=multi-user.target
