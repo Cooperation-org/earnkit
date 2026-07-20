@@ -24,14 +24,14 @@
   tasks:
     # ---- Odoo: one database per team --------------------------------------
     # Mirrors Odoo's own createdb (unicode, template0, C collate).
-    - name: "Odoo DB crm-{{ team_slug }}_vc"
+    - name: "Odoo DB crm-{{ team_slug }}"
       community.postgresql.postgresql_db:
         login_host: "{{ database_host }}"
         port: "{{ database_port }}"
         login_user: "{{ database_admin_user }}"
         login_password: "{{ database_admin_password }}"
         maintenance_db: postgres
-        name: "crm-{{ team_slug }}_vc"
+        name: "crm-{{ team_slug }}"
         owner: "{{ odoo_db_user }}"
         encoding: UTF-8
         lc_collate: C     # VERIFY: matches odoo/service/db.py; C.UTF-8 also fine
@@ -40,7 +40,7 @@
       register: odoo_db
       no_log: true
 
-    - name: "Odoo: initialize crm-{{ team_slug }}_vc (crm + auth_oauth, no demo)"
+    - name: "Odoo: initialize crm-{{ team_slug }} (crm + auth_oauth, no demo)"
       ansible.builtin.command:
         argv:
           - /opt/odoo/venv/bin/python
@@ -48,7 +48,7 @@
           - -c
           - /etc/odoo/odoo.conf
           - -d
-          - "crm-{{ team_slug }}_vc"
+          - "crm-{{ team_slug }}"
           - -i
           - "{{ odoo_team_init_modules | default('base,crm,auth_oauth') }}"
           - --without-demo=all
@@ -61,11 +61,11 @@
     # Endpoints CONFIRMED against the live CRM provider row (2026-07-13):
     # stock auth_oauth uses the implicit flow — IdP client must allow it.
     # Redirect URI per team: https://crm-<slug>.{{ cohort_domain }}/auth_oauth/signin
-    - name: "Odoo: LinkedTrust OIDC provider in crm-{{ team_slug }}_vc"
+    - name: "Odoo: LinkedTrust OIDC provider in crm-{{ team_slug }}"
       ansible.builtin.shell:
         cmd: |
           /opt/odoo/venv/bin/python /opt/odoo/odoo/odoo-bin shell \
-            -c /etc/odoo/odoo.conf -d crm-{{ team_slug }}_vc --no-http <<'PY'
+            -c /etc/odoo/odoo.conf -d crm-{{ team_slug }} --no-http <<'PY'
           Provider = env['auth.oauth.provider']
           vals = {
               'name': 'LinkedTrust',

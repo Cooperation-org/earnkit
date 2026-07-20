@@ -79,11 +79,14 @@ odoo_version: "17.0"                      # git branch of odoo/odoo
 odoo_db_user: odoo_VMNAME
 odoo_db_password: "VAULT-ME"
 odoo_admin_password: "VAULT-ME"           # master password (db management)
-# Team CRM hostname scheme; %d is the hostname's first label. Databases carry a
-# _vc suffix so they stay separate from other tenants on the shared postgres:
-#   crm.{{ cohort_domain }}            -> database crm_vc
-#   crm-<team_slug>.{{ cohort_domain }} -> database crm-<team_slug>_vc
-odoo_dbfilter: "^%d_vc$"
+# Team CRM hostname scheme; %d is the hostname's first label, mapped 1:1 to the
+# database name. Odoo needs one database per team, so there is no bare
+# crm.<domain> — every CRM is crm-<team_slug>:
+#   crm-vc.{{ cohort_domain }}          -> database crm-vc      (the vc team)
+#   crm-<team_slug>.{{ cohort_domain }} -> database crm-<team_slug>
+# Keep team slugs distinct on the shared postgres (the cluster hosts unrelated
+# projects); the crm- prefix plus the slug is what keeps them separate.
+odoo_dbfilter: "^%d$"
 # Custom CRM addons installed into every team database (each addon is its own
 # repo — earnkit composes, never forks). Two more addons exist on our live CRM
 # but are not yet in git (crm_relationship_dashboard, quick_outreach) — add
