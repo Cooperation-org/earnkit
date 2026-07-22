@@ -39,6 +39,19 @@ with open(sys.argv[1], "w") as f:
                "team_name": os.environ["TEAM_NAME"]}, f)
 PY
 
+# ansible-playbook runs as root (via the runner's sudo) under the service's
+# systemd sandbox (ProtectHome=true), so /root has no writable home for
+# ansible's temp dirs; and add-team becomes several unprivileged users
+# (odoo/govkit/taiga) that must read the staged module files. Root both temp
+# paths in a shared, world-traversable dir under /tmp — the layout ansible
+# itself recommends for this case (PrivateTmp=false keeps /tmp real).
+export HOME=/var/lib/earnkit-runner
+runner_tmp=/tmp/earnkit-ansible
+mkdir -p "$runner_tmp"
+chmod 1777 "$runner_tmp"
+export ANSIBLE_LOCAL_TEMP="$runner_tmp"
+export ANSIBLE_REMOTE_TEMP="$runner_tmp"
+
 export ANSIBLE_CONFIG="$STACK/ansible.cfg"
 export ANSIBLE_COLLECTIONS_PATH=/opt/earnkit/collections
 exec "$VENV/bin/ansible-playbook" \

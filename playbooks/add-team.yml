@@ -173,6 +173,14 @@
                           is_private=True))
         print('created' if created else 'exists')
         "
+      args:
+        chdir: /opt/taiga/taiga-back
+      # taiga-back's manage.py defaults to settings.common (localhost DB); the
+      # real DB host lives in settings.config, which the taiga-back service
+      # selects via this same env var. become_user does not inherit the unit's
+      # Environment=, so set it explicitly or the shell hits 127.0.0.1:5432.
+      environment:
+        DJANGO_SETTINGS_MODULE: settings.config
       become_user: taiga
       register: taiga_proj
       changed_when: "'created' in taiga_proj.stdout"
