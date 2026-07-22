@@ -1,0 +1,146 @@
+---
+# earnkit — remove (or purge) TEAM-level resources for one cohort team.
+# The mirror of add-team.yml. Two modes:
+#
+#   Default (REVERSIBLE — "deactivate"): unroute the CRM subdomain and delete the
+#   amebo instance row, so the team drops off the cohort dash and off the web.
+#   ALL data is preserved (Odoo DB, Taiga project, GovKit org, amebo org+members
+#   stay untouched). Re-running add-team.yml fully restores the team. This is the
+#   only mode the earnkit-runner (machine-triggered) path uses.
+#
+#   Purge (-e purge=true — DESTRUCTIVE, operator-only): additionally drops the
+#   Odoo database and deletes the Taiga project, GovKit org, and amebo org rows.
+#   Irreversible. Never wired to an automatic trigger.
+#
+# Usage:
+#   ansible-playbook -i <inventory> playbooks/remove-team.yml -e team_slug=sunrise
+#   ansible-playbook -i <inventory> playbooks/remove-team.yml -e team_slug=sunrise -e purge=true
+- name: Remove a cohort team
+  hosts: cohort
+  become: true
+  vars:
+    team_slug: ""          # required, [a-z0-9-]
+    purge: false           # true = also destroy data (Odoo DB, Taiga, GovKit, amebo org)
+  pre_tasks:
+    - name: Validate team vars
+      ansible.builtin.assert:
+        that:
+          - team_slug is match('^[a-z0-9][a-z0-9-]{1,30}$')
+        fail_msg: "Pass -e team_slug=<slug> (and optionally -e purge=true)"
+
+    - name: Announce mode
+      ansible.builtin.debug:
+        msg: >-
+          Removing team '{{ team_slug }}' in
+          {{ 'PURGE (destructive)' if (purge | bool) else 'reversible (deactivate)' }} mode.
+
+  tasks:
+    # ---- Caddy: drop the CRM subdomain route (always; safe + idempotent) ------
+    - name: "Caddy: remove route crm-{{ team_slug }}.{{ cohort_domain }}"
+      ansible.builtin.uri:
+        url: "http://{{ caddy_api_host }}:{{ caddy_api_port }}/remove-crm-route"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ caddy_api_token }}"
+        body_format: json
+        body:
+          slug: "{{ team_slug }}"
+        status_code: [200, 201, 204, 404, 409]   # 404/409 = already gone; idempotent
+      when: caddy_api_token | default('') | length > 0
+
+    # ---- amebo: remove the instance row (always; reversible) ------------------
+    # The instance row is what makes the team visible/active in amebo's dash.
+    # Deleting it hides the team; add-team.yml re-inserts it. Org + members stay.
+    - name: "amebo: remove instance row for {{ team_slug }}"
+      community.postgresql.postgresql_query:
+        login_host: "{{ database_host }}"
+        login_port: "{{ database_port }}"
+        login_user: "{{ amebo_db_user }}"
+        login_password: "{{ amebo_db_password }}"
+        db: "{{ amebo_db_name }}"
+        query: "DELETE FROM instances WHERE slug = %(slug)s"
+        named_args:
+          slug: "{{ team_slug }}"
+
+    # ======================================================================
+    # Everything below is PURGE-ONLY (destructive, irreversible).
+    # ======================================================================
+
+    # ---- Odoo: drop the team database ----------------------------------------
+    # crm-<slug> is deterministic (slug is validated [a-z0-9-]), so the name is
+    # never attacker-controlled. force terminates any lingering connections.
+    - name: "Odoo: drop database crm-{{ team_slug }} (PURGE)"
+      community.postgresql.postgresql_db:
+        login_host: "{{ database_host }}"
+        port: "{{ database_port }}"
+        login_user: "{{ database_admin_user }}"
+        login_password: "{{ database_admin_password }}"
+        maintenance_db: postgres
+        name: "crm-{{ team_slug }}"
+        state: absent
+        force: true
+      when: purge | bool
+
+    # ---- Taiga: delete the project (PURGE) -----------------------------------
+    - name: "Taiga: delete project {{ team_slug }} (PURGE)"
+      ansible.builtin.shell: |
+        /opt/taiga/venv/bin/python /opt/taiga/taiga-back/manage.py shell -c "
+        from taiga.projects.models import Project
+        qs = Project.objects.filter(slug='{{ team_slug }}')
+        n = qs.count()
+        for p in qs: p.delete()
+        print('deleted', n)
+        "
+      args:
+        chdir: /opt/taiga/taiga-back
+      environment:
+        DJANGO_SETTINGS_MODULE: settings.config
+      become_user: taiga
+      register: taiga_del
+      changed_when: "'deleted 0' not in taiga_del.stdout"
+      when: purge | bool
+
+    # ---- GovKit: delete the org (PURGE) --------------------------------------
+    - name: "GovKit: delete org {{ team_slug }} (PURGE)"
+      ansible.builtin.shell: |
+        /opt/govkit/venv/bin/python /opt/govkit/src/manage.py shell -c "
+        from apps.orgs.models import Org
+        o = Org.objects.filter(slug='{{ team_slug }}').first()
+        print('deleted' if o and o.delete() or not o else 'missing', bool(o))
+        "
+      args:
+        chdir: /opt/govkit/src
+      become_user: govkit
+      register: govkit_del
+      changed_when: "'True' in govkit_del.stdout"
+      when: purge | bool
+
+    # ---- amebo: delete org + members + tool accounts (PURGE) ------------------
+    # Children first (FK order), then the org row itself. Scoped by org_slug.
+    - name: "amebo: purge member_tool_accounts + org_members + platform_users (PURGE)"
+      community.postgresql.postgresql_query:
+        login_host: "{{ database_host }}"
+        login_port: "{{ database_port }}"
+        login_user: "{{ amebo_db_user }}"
+        login_password: "{{ amebo_db_password }}"
+        db: "{{ amebo_db_name }}"
+        query: "{{ item }}"
+        named_args:
+          slug: "{{ team_slug }}"
+      loop:
+        - "DELETE FROM member_tool_accounts WHERE org_id IN (SELECT org_id FROM organizations WHERE org_slug = %(slug)s)"
+        - "DELETE FROM org_members WHERE org_id IN (SELECT org_id FROM organizations WHERE org_slug = %(slug)s)"
+        - "DELETE FROM platform_users WHERE org_id IN (SELECT org_id FROM organizations WHERE org_slug = %(slug)s)"
+      when: purge | bool
+
+    - name: "amebo: delete organization row {{ team_slug }} (PURGE)"
+      community.postgresql.postgresql_query:
+        login_host: "{{ database_host }}"
+        login_port: "{{ database_port }}"
+        login_user: "{{ amebo_db_user }}"
+        login_password: "{{ amebo_db_password }}"
+        db: "{{ amebo_db_name }}"
+        query: "DELETE FROM organizations WHERE org_slug = %(slug)s"
+        named_args:
+          slug: "{{ team_slug }}"
+      when: purge | bool

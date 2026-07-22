@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# run-remove-team <team_slug>
+#
+# The second thing the earnkit-runner service may sudo (see
+# /etc/sudoers.d/earnkit-runner): execute remove-team.yml locally for one team,
+# in REVERSIBLE mode only. It pins purge=false, so the machine-triggered path
+# can never drop the Odoo DB or delete Taiga/GovKit/amebo rows — an operator does
+# that deliberately by hand (`ansible-playbook remove-team.yml -e purge=true`).
+# Re-validates its input even though the service already did — sudo boundary,
+# trust nothing.
+set -euo pipefail
+
+STACK=/opt/earnkit/stack
+VENV=/opt/earnkit/ansible-venv
+
+if [ "$#" -ne 1 ]; then
+    echo "usage: run-remove-team <team_slug>" >&2
+    exit 2
+fi
+slug=$1
+
+if ! [[ "$slug" =~ ^[a-z0-9][a-z0-9-]{1,30}$ ]]; then
+    echo "refusing team_slug '$slug' (want [a-z0-9][a-z0-9-]{1,30})" >&2
+    exit 2
+fi
+
+extra_vars=$(mktemp /tmp/remove-team-vars.XXXXXX.json)
+trap 'rm -f "$extra_vars"' EXIT
+TEAM_SLUG="$slug" python3 - "$extra_vars" <<'PY'
+import json, os, sys
+with open(sys.argv[1], "w") as f:
+    # purge is pinned false here: reversible teardown only from the runner.
+    json.dump({"team_slug": os.environ["TEAM_SLUG"], "purge": False}, f)
+PY
+
+# ansible-playbook runs as root (via the runner's sudo) under the service's
+# systemd sandbox (ProtectHome=true); root has no writable home for ansible's
+# temp dirs, and the playbook becomes odoo/govkit/taiga. Root both temp paths in
+# a shared, world-traversable dir under /tmp (PrivateTmp=false keeps /tmp real).
+export HOME=/var/lib/earnkit-runner
+runner_tmp=/tmp/earnkit-ansible
+mkdir -p "$runner_tmp"
+chmod 1777 "$runner_tmp"
+export ANSIBLE_LOCAL_TEMP="$runner_tmp"
+export ANSIBLE_REMOTE_TEMP="$runner_tmp"
+
+export ANSIBLE_CONFIG="$STACK/ansible.cfg"
+export ANSIBLE_COLLECTIONS_PATH=/opt/earnkit/collections
+exec "$VENV/bin/ansible-playbook" \
+    -i "$STACK/inventory-local" \
+    "$STACK/playbooks/remove-team.yml" \
+    -e "@$extra_vars"

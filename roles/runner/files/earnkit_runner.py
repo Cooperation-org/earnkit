@@ -15,7 +15,10 @@ operator terminal is. It binds 127.0.0.1 only; the token is defense in depth,
 not the perimeter.
 
 API (all JSON):
-  POST /run/add-team {"team_slug": ..., "team_name": ...} -> 202 {"job_id": ...}
+  POST /run/add-team    {"team_slug": ..., "team_name": ...} -> 202 {"job_id": ...}
+  POST /run/remove-team {"team_slug": ...}                   -> 202 {"job_id": ...}
+       Reversible teardown only (unroute + drop the amebo instance row); the
+       destructive purge stays operator-only, never machine-triggered.
        409 if a job for that slug is already queued/running; 400 on bad input.
   GET  /jobs           -> most recent jobs, newest first
   GET  /jobs/<id>      -> one job + the tail of its playbook log
@@ -48,6 +51,9 @@ TOKEN = os.environ.get("RUNNER_TOKEN") or ""
 PORT = int(os.environ.get("RUNNER_PORT") or "8946")
 STATE_DIR = os.environ.get("RUNNER_STATE_DIR") or "/var/lib/earnkit-runner"
 WRAPPER = os.environ.get("RUNNER_WRAPPER") or "/opt/earnkit/bin/run-add-team"
+REMOVE_WRAPPER = os.environ.get("RUNNER_REMOVE_WRAPPER") or "/opt/earnkit/bin/run-remove-team"
+# One sudo-whitelisted wrapper per action; the worker picks by job["action"].
+WRAPPERS = {"add-team": WRAPPER, "remove-team": REMOVE_WRAPPER}
 # "0" runs the wrapper directly — tests only; deployed units keep the default.
 USE_SUDO = (os.environ.get("RUNNER_USE_SUDO") or "1") != "0"
 JOBS_DIR = os.path.join(STATE_DIR, "jobs")
@@ -116,8 +122,12 @@ def _worker() -> None:
             job["state"] = "running"
             job["started_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             _write_job(job)
-        argv = (["sudo", "-n"] if USE_SUDO else []) + [WRAPPER, job["team_slug"], job["team_name"]]
-        logger.info("job %s: %s", job_id, " ".join(argv[:3] + [job["team_slug"], "..."]))
+        action = job.get("action", "add-team")
+        wrapper = WRAPPERS.get(action, WRAPPER)
+        # add-team needs the display name; remove-team is slug-only.
+        extra = [job["team_slug"]] if action == "remove-team" else [job["team_slug"], job["team_name"]]
+        argv = (["sudo", "-n"] if USE_SUDO else []) + [wrapper] + extra
+        logger.info("job %s: action=%s slug=%s", job_id, action, job["team_slug"])
         try:
             with open(_log_path(job_id), "ab") as log:
                 rc = subprocess.run(
@@ -180,27 +190,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, job)
         return self._send(404, {"error": "unknown path"})
 
-    def do_POST(self):
-        if not self._authed():
-            return self._send(401, {"error": "bad or missing bearer token"})
-        if self.path != "/run/add-team":
-            return self._send(404, {"error": "unknown path"})
-        try:
-            length = int(self.headers.get("Content-Length") or "0")
-            body = json.loads(self.rfile.read(length) or b"{}")
-        except ValueError:
-            return self._send(400, {"error": "body is not JSON"})
-        slug = body.get("team_slug") or ""
-        name = (body.get("team_name") or "").strip()
-        if not SLUG_RE.fullmatch(slug):
-            return self._send(400, {"error": "team_slug must match [a-z0-9][a-z0-9-]{1,30}"})
-        if not (1 < len(name) <= 255) or any(ord(c) < 32 for c in name):
-            return self._send(400, {"error": "team_name must be 2-255 printable characters"})
+    def _enqueue(self, action: str, slug: str, name: str):
         with _lock:
             if _slug_busy(slug):
                 return self._send(409, {"error": f"a job for '{slug}' is already queued/running"})
             job = {
                 "job_id": uuid.uuid4().hex,
+                "action": action,
                 "team_slug": slug,
                 "team_name": name,
                 "state": "queued",
@@ -208,8 +204,29 @@ class Handler(BaseHTTPRequestHandler):
             }
             _write_job(job)
         _queue.put(job["job_id"])
-        logger.info("job %s queued for team %s", job["job_id"], slug)
+        logger.info("job %s queued: action=%s team=%s", job["job_id"], action, slug)
         return self._send(202, {"job_id": job["job_id"]})
+
+    def do_POST(self):
+        if not self._authed():
+            return self._send(401, {"error": "bad or missing bearer token"})
+        if self.path not in ("/run/add-team", "/run/remove-team"):
+            return self._send(404, {"error": "unknown path"})
+        try:
+            length = int(self.headers.get("Content-Length") or "0")
+            body = json.loads(self.rfile.read(length) or b"{}")
+        except ValueError:
+            return self._send(400, {"error": "body is not JSON"})
+        slug = body.get("team_slug") or ""
+        if not SLUG_RE.fullmatch(slug):
+            return self._send(400, {"error": "team_slug must match [a-z0-9][a-z0-9-]{1,30}"})
+        if self.path == "/run/add-team":
+            name = (body.get("team_name") or "").strip()
+            if not (1 < len(name) <= 255) or any(ord(c) < 32 for c in name):
+                return self._send(400, {"error": "team_name must be 2-255 printable characters"})
+            return self._enqueue("add-team", slug, name)
+        # /run/remove-team — slug only. Reversible teardown; purge is operator-only.
+        return self._enqueue("remove-team", slug, slug)
 
 
 def main() -> None:

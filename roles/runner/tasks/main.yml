@@ -100,19 +100,23 @@
     mode: "0755"
   notify: restart earnkit-runner
 
-- name: add-team wrapper (the one sudo-whitelisted command)
+- name: add-team / remove-team wrappers (the sudo-whitelisted commands)
   ansible.builtin.copy:
-    src: run-add-team
-    dest: /opt/earnkit/bin/run-add-team
+    src: "{{ item }}"
+    dest: "/opt/earnkit/bin/{{ item }}"
     mode: "0755"
+  loop:
+    - run-add-team
+    - run-remove-team
 
-- name: sudoers — runner may run exactly the wrapper
+- name: sudoers — runner may run exactly the two wrappers
   ansible.builtin.copy:
     dest: /etc/sudoers.d/earnkit-runner
     mode: "0440"
     validate: visudo -cf %s
     content: |
       {{ runner_user }} ALL=(root) NOPASSWD: /opt/earnkit/bin/run-add-team
+      {{ runner_user }} ALL=(root) NOPASSWD: /opt/earnkit/bin/run-remove-team
 
 - name: runner environment
   ansible.builtin.copy:
