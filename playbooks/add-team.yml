@@ -244,6 +244,41 @@
       register: govkit_org
       changed_when: "'created' in govkit_org.stdout"
 
+    # ---- GovKit: Taiga task source (feeds the dash "Tasks to do" card) ------
+    # Wires GovKit -> the team's Taiga board over Taiga's REST API, so the card
+    # and task sync work with zero human token-pasting. base_url is the local
+    # Taiga backend; api_token is the durable Application token (a Taiga bot
+    # superuser that can read every team's board) from the private inventory.
+    # The token is Fernet-encrypted at rest by the model's EncryptedTextField,
+    # which needs GOVKIT_SECRET_KEY — manage.py loads it from /opt/govkit/src/.env.
+    # NOTE: the card needs GovKit to send Taiga's Application auth scheme; until
+    # that ships in the govkit repo it stores fine but returns 401 on fetch.
+    - name: "GovKit: Taiga task source for {{ team_slug }}"
+      ansible.builtin.shell: |
+        /opt/govkit/venv/bin/python manage.py shell -c "
+        import os
+        from apps.orgs.models import Org
+        from apps.tasksources.models import TaskSourceConfig, AdapterType
+        org = Org.objects.get(slug=os.environ['TS_SLUG'])
+        cfg, created = TaskSourceConfig.objects.get_or_create(
+            org=org, adapter_type=AdapterType.TAIGA)
+        cfg.base_url = os.environ['TS_BASE_URL']
+        cfg.project_selector = os.environ['TS_SLUG']
+        cfg.api_token = os.environ['TS_TOKEN']
+        cfg.save()
+        print('created' if created else 'updated')
+        "
+      args:
+        chdir: /opt/govkit/src
+      environment:
+        TS_SLUG: "{{ team_slug }}"
+        TS_BASE_URL: "{{ taiga_api_base_url }}"
+        TS_TOKEN: "{{ taiga_api_token }}"
+      become_user: govkit
+      register: govkit_tasksource
+      changed_when: "'created' in govkit_tasksource.stdout"
+      no_log: true   # carries the Taiga token in its env
+
     # ---- Caddy: register CRM subdomain on the Proxmox host ------------------
     - name: "Caddy: route crm-{{ team_slug }}.{{ cohort_domain }}"
       ansible.builtin.uri:

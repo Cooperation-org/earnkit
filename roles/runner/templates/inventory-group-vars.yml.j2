@@ -20,3 +20,5 @@ amebo_db_password: {{ amebo_db_password | to_json }}
 caddy_api_host: {{ caddy_api_host | default('') | to_json }}
 caddy_api_port: {{ caddy_api_port | default('') | to_json }}
 caddy_api_token: {{ caddy_api_token | default('') | to_json }}
+taiga_api_base_url: {{ taiga_api_base_url | default('http://127.0.0.1:8001') | to_json }}
+taiga_api_token: {{ taiga_api_token | to_json }}
