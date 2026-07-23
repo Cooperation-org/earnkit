@@ -87,8 +87,12 @@ with transaction.atomic():
             pending.save(update_fields=["user"])
             print("changed: attached %s to their pending invitation" % email)
         else:
+            # Trust-by-default (golda, 2026-07-23): every member is an admin on
+            # their OWN team's project — they can do everything, and Taiga keeps
+            # an audit log of who did what. Only ever set on creation; an
+            # operator's later demotion is never overwritten (create-only below).
             Membership.objects.create(project=project, user=user, role=role,
-                                      is_admin=False, email=user.email)
+                                      is_admin=True, email=user.email)
             print("changed: added %s to project %s" % (email, org_slug))
         changed += 1
 
