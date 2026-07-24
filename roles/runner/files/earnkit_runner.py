@@ -20,6 +20,9 @@ API (all JSON):
        Reversible teardown only (unroute + drop the amebo instance row); the
        destructive purge stays operator-only, never machine-triggered.
        409 if a job for that slug is already queued/running; 400 on bad input.
+  POST /run/sync-members {"team_slug": ...}                  -> 202 {"job_id": ...}
+       Reconcile that team's GovKit members into CRM (Odoo) + Taiga. Idempotent;
+       amebo calls it on invite accept. 409 if already queued/running.
   GET  /jobs           -> most recent jobs, newest first
   GET  /jobs/<id>      -> one job + the tail of its playbook log
   GET  /health         -> {"ok": true}
@@ -52,8 +55,9 @@ PORT = int(os.environ.get("RUNNER_PORT") or "8946")
 STATE_DIR = os.environ.get("RUNNER_STATE_DIR") or "/var/lib/earnkit-runner"
 WRAPPER = os.environ.get("RUNNER_WRAPPER") or "/opt/earnkit/bin/run-add-team"
 REMOVE_WRAPPER = os.environ.get("RUNNER_REMOVE_WRAPPER") or "/opt/earnkit/bin/run-remove-team"
+SYNC_WRAPPER = os.environ.get("RUNNER_SYNC_WRAPPER") or "/opt/earnkit/bin/run-sync-members"
 # One sudo-whitelisted wrapper per action; the worker picks by job["action"].
-WRAPPERS = {"add-team": WRAPPER, "remove-team": REMOVE_WRAPPER}
+WRAPPERS = {"add-team": WRAPPER, "remove-team": REMOVE_WRAPPER, "sync-members": SYNC_WRAPPER}
 # "0" runs the wrapper directly — tests only; deployed units keep the default.
 USE_SUDO = (os.environ.get("RUNNER_USE_SUDO") or "1") != "0"
 JOBS_DIR = os.path.join(STATE_DIR, "jobs")
@@ -124,8 +128,8 @@ def _worker() -> None:
             _write_job(job)
         action = job.get("action", "add-team")
         wrapper = WRAPPERS.get(action, WRAPPER)
-        # add-team needs the display name; remove-team is slug-only.
-        extra = [job["team_slug"]] if action == "remove-team" else [job["team_slug"], job["team_name"]]
+        # add-team needs the display name; remove-team and sync-members are slug-only.
+        extra = [job["team_slug"], job["team_name"]] if action == "add-team" else [job["team_slug"]]
         argv = (["sudo", "-n"] if USE_SUDO else []) + [wrapper] + extra
         logger.info("job %s: action=%s slug=%s", job_id, action, job["team_slug"])
         try:
@@ -210,7 +214,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._authed():
             return self._send(401, {"error": "bad or missing bearer token"})
-        if self.path not in ("/run/add-team", "/run/remove-team"):
+        if self.path not in ("/run/add-team", "/run/remove-team", "/run/sync-members"):
             return self._send(404, {"error": "unknown path"})
         try:
             length = int(self.headers.get("Content-Length") or "0")
@@ -225,8 +229,12 @@ class Handler(BaseHTTPRequestHandler):
             if not (1 < len(name) <= 255) or any(ord(c) < 32 for c in name):
                 return self._send(400, {"error": "team_name must be 2-255 printable characters"})
             return self._enqueue("add-team", slug, name)
-        # /run/remove-team — slug only. Reversible teardown; purge is operator-only.
-        return self._enqueue("remove-team", slug, slug)
+        if self.path == "/run/remove-team":
+            # slug only. Reversible teardown; purge is operator-only.
+            return self._enqueue("remove-team", slug, slug)
+        # /run/sync-members — slug only. Reconcile that team's GovKit members into
+        # its CRM (Odoo) + Taiga project. Idempotent; amebo calls it on invite accept.
+        return self._enqueue("sync-members", slug, slug)
 
 
 def main() -> None:

@@ -97,6 +97,17 @@
              | selectattr('auth_provider', 'equalto', 'linkedtrust')
              | selectattr('auth_provider_id') | list }}
 
+    # Optional narrowing for a targeted/on-accept run: `-e sync_only_org=<slug>`
+    # limits the Odoo/Taiga provisioning loops below to ONE team (what the runner's
+    # run-sync-members passes). Unset -> provision every team (the scheduled timer /
+    # operator reconcile). The reports above always reflect all teams.
+    - name: Narrow provisioning to sync_only_org when set
+      ansible.builtin.set_fact:
+        sync_run_slugs: >-
+          {{ sync_team_slugs | select('equalto', sync_only_org) | list
+             if (sync_only_org | default('')) | length > 0
+             else sync_team_slugs }}
+
     - name: "Report: GovKit orgs without a team CRM database (skipped)"
       ansible.builtin.debug:
         msg: >-
@@ -146,7 +157,7 @@
       vars:
         sync_org_slug: "{{ item }}"
         sync_members: "{{ sync_linked | selectattr('org_slug', 'equalto', item) | list }}"
-      loop: "{{ sync_team_slugs }}"
+      loop: "{{ sync_run_slugs }}"
       become_user: odoo
       register: odoo_sync
       changed_when: "'changed:' in odoo_sync.stdout"
@@ -167,7 +178,7 @@
       vars:
         sync_org_slug: "{{ item }}"
         sync_members: "{{ govkit_members.query_result | selectattr('org_slug', 'equalto', item) | list }}"
-      loop: "{{ sync_team_slugs }}"
+      loop: "{{ sync_run_slugs }}"
       # taiga-back's manage.py defaults to settings.common (localhost DB); the
       # real DB host lives in settings.config, which the taiga-back service runs
       # under. Without this the shell connects to 127.0.0.1:5432 and fails.

@@ -100,7 +100,7 @@
     mode: "0755"
   notify: restart earnkit-runner
 
-- name: add-team / remove-team wrappers (the sudo-whitelisted commands)
+- name: add-team / remove-team / sync-members wrappers (the sudo-whitelisted commands)
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: "/opt/earnkit/bin/{{ item }}"
@@ -108,8 +108,9 @@
   loop:
     - run-add-team
     - run-remove-team
+    - run-sync-members
 
-- name: sudoers — runner may run exactly the two wrappers
+- name: sudoers — runner may run exactly the whitelisted wrappers
   ansible.builtin.copy:
     dest: /etc/sudoers.d/earnkit-runner
     mode: "0440"
@@ -117,6 +118,7 @@
     content: |
       {{ runner_user }} ALL=(root) NOPASSWD: /opt/earnkit/bin/run-add-team
       {{ runner_user }} ALL=(root) NOPASSWD: /opt/earnkit/bin/run-remove-team
+      {{ runner_user }} ALL=(root) NOPASSWD: /opt/earnkit/bin/run-sync-members
 
 - name: runner environment
   ansible.builtin.copy:

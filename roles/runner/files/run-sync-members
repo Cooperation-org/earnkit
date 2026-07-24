@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# run-sync-members <team_slug>
+#
+# Sudo-whitelisted wrapper the earnkit-runner may invoke (see
+# /etc/sudoers.d/earnkit-runner) to reconcile ONE team's GovKit members into its
+# CRM (Odoo) + Taiga project — org-scoped via sync_only_org so it never touches
+# other teams. Idempotent (create/link only). amebo calls the runner's
+# /run/sync-members on invite accept; the earnkit-sync-members.timer runs the
+# unscoped full reconcile on a schedule as the safety net.
+#
+# Re-validates its input even though the runner already did — sudo boundary,
+# trust nothing.
+set -euo pipefail
+
+STACK=/opt/earnkit/stack
+VENV=/opt/earnkit/ansible-venv
+
+if [ "$#" -ne 1 ]; then
+    echo "usage: run-sync-members <team_slug>" >&2
+    exit 2
+fi
+slug=$1
+if ! [[ "$slug" =~ ^[a-z0-9][a-z0-9-]{1,30}$ ]]; then
+    echo "refusing team_slug '$slug' (want [a-z0-9][a-z0-9-]{1,30})" >&2
+    exit 2
+fi
+
+# Same ansible env the runner uses for add-team: no writable /root under the
+# service sandbox, so root the temp dirs in a shared world-traversable dir.
+export HOME=/var/lib/earnkit-runner
+runner_tmp=/tmp/earnkit-ansible
+mkdir -p "$runner_tmp"
+chmod 1777 "$runner_tmp"
+export ANSIBLE_LOCAL_TEMP="$runner_tmp"
+export ANSIBLE_REMOTE_TEMP="$runner_tmp"
+export ANSIBLE_CONFIG="$STACK/ansible.cfg"
+export ANSIBLE_COLLECTIONS_PATH=/opt/earnkit/collections
+exec "$VENV/bin/ansible-playbook" \
+    -i "$STACK/inventory-local" \
+    "$STACK/playbooks/sync-team-members.yml" \
+    -e "sync_only_org=$slug"
