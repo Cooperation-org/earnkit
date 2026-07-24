@@ -42,6 +42,10 @@
           vals['logo'] = """{{ crm_logo.content }}"""
           {% endif %}
           company.write(vals)
+          # Brand the stock sales team to the org too (covers pre-existing teams).
+          team = env.ref('sales_team.team_sales_department', raise_if_not_found=False)
+          if team:
+              team.write({'name': """{{ team_name }}"""})
           icp = env['ir.config_parameter'].sudo()
           icp.set_param('web.base.url', 'https://crm-{{ team_slug }}.{{ cohort_domain }}')
           icp.set_param('web.base.url.freeze', 'True')

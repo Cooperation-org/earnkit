@@ -122,6 +122,11 @@
             -c /etc/odoo/odoo.conf -d crm-{{ team_slug }} --no-http <<'PY'
           company = env.ref('base.main_company')
           company.write({'name': """{{ team_name }}"""})
+          # Brand the stock sales team to the org, so new members join a
+          # team named for them (sync-members-odoo adds each member to it).
+          team = env.ref('sales_team.team_sales_department', raise_if_not_found=False)
+          if team:
+              team.write({'name': """{{ team_name }}"""})
           icp = env['ir.config_parameter'].sudo()
           icp.set_param('web.base.url', 'https://crm-{{ team_slug }}.{{ cohort_domain }}')
           icp.set_param('web.base.url.freeze', 'True')

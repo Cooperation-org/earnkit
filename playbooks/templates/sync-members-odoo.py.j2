@@ -91,5 +91,26 @@ for m in members:
             print("changed: granted %d missing group(s) to %s" % (len(missing), email))
         changed += 1
 
+    # Every member joins the team's sales team, so the leads/contacts they add
+    # belong to the team's pipeline (not "no team"). team_sales_department is
+    # the stock team every fresh DB ships; add-team.yml renames it to the team.
+    # Idempotent: only creates the membership when it is missing.
+    team = env.ref('sales_team.team_sales_department', raise_if_not_found=False)
+    if team is not None and not env['crm.team.member'].search_count(
+            [('crm_team_id', '=', team.id), ('user_id', '=', user.id)]):
+        env['crm.team.member'].create(
+            {'crm_team_id': team.id, 'user_id': user.id})
+        print("changed: added %s to sales team '%s'" % (email, team.name))
+        changed += 1
+
+    # Land members on the CRM Pipeline — the most useful page, where they add
+    # contacts — instead of Odoo's default first menu (Discuss). Sets the
+    # per-user Home Action; never overrides one the user chose for themselves.
+    pipeline = env.ref('crm.crm_lead_action_pipeline', raise_if_not_found=False)
+    if pipeline is not None and not user.action_id:
+        user.write({'action_id': pipeline.id})
+        print("changed: set %s Home Action to CRM Pipeline" % email)
+        changed += 1
+
 env.cr.commit()
 print("SYNC-RESULT ok changed=%d members=%d" % (changed, len(members)))
