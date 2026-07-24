@@ -168,6 +168,12 @@
         sync_org_slug: "{{ item }}"
         sync_members: "{{ govkit_members.query_result | selectattr('org_slug', 'equalto', item) | list }}"
       loop: "{{ sync_team_slugs }}"
+      # taiga-back's manage.py defaults to settings.common (localhost DB); the
+      # real DB host lives in settings.config, which the taiga-back service runs
+      # under. Without this the shell connects to 127.0.0.1:5432 and fails.
+      # (Same env add-team.yml's Taiga task sets.)
+      environment:
+        DJANGO_SETTINGS_MODULE: settings.config
       become_user: taiga
       register: taiga_sync
       changed_when: "'changed:' in taiga_sync.stdout"
