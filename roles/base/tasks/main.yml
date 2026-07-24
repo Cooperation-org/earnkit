@@ -55,6 +55,11 @@
     state: directory
     mode: "0755"
 
+# KEEP THIS 0644 root:root. It is SHARED by all non-root service/deploy users via
+# /etc/ssh/ssh_config.d/earnkit-github.conf. A root-owned 0600 key is UNREADABLE by
+# them, so every deploy dies on "Load key ...: Permission denied" / publickey. ssh
+# accepts a root-owned world-readable key read by a non-root user. Do NOT "harden"
+# this to 0600 — see the README this role drops next to the key.
 - name: GitHub deploy key (shared by all service users)
   ansible.builtin.copy:
     content: "{{ github_ssh_private_key }}"
@@ -71,6 +76,39 @@
       Host github.com
         IdentityFile /etc/earnkit/github-deploy-key
         IdentitiesOnly yes
+
+- name: README next to the deploy key (why it must stay 0644)
+  ansible.builtin.copy:
+    dest: /etc/earnkit/README
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      /etc/earnkit — earnkit deploy secrets
+
+      github-deploy-key — KEEP IT 0644 root:root. DO NOT chmod 600.
+
+      Shared GitHub deploy key used by ALL non-root service/deploy users
+      (workersvc, govkit, amebo, taiga, CI) via the system ssh config
+      /etc/ssh/ssh_config.d/earnkit-github.conf
+      (Host github.com -> IdentityFile /etc/earnkit/github-deploy-key).
+
+      Required state:  -rw-r--r-- root root   (mode 0644, owner root:root)
+
+      Why 0644, not 0600:
+      - Non-root users must READ it. A root-owned 0600 key is unreadable by them;
+        ssh then fails "Load key ...: Permission denied" and deploys break with
+        "git@github.com: Permission denied (publickey)".
+      - ssh ACCEPTS a root-owned world-readable key read by a non-root user
+        (verified: sudo -u govkit ssh -i /etc/earnkit/github-deploy-key -T
+        git@github.com -> "Hi gvelez17! You've successfully authenticated").
+        The "UNPROTECTED PRIVATE KEY" rejection only applies to a key you OWN.
+
+      If a deploy fails on the key, restore:
+        sudo chown root:root /etc/earnkit/github-deploy-key
+        sudo chmod 644 /etc/earnkit/github-deploy-key
+
+      Managed by earnkit roles/base. Setting 0600 "for security" WILL break deploys.
 
 - name: UFW allow ssh
   community.general.ufw:
