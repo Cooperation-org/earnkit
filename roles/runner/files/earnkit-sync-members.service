@@ -1,0 +1,19 @@
+[Unit]
+Description=earnkit: reconcile GovKit members into team CRM (Odoo) + Taiga
+Documentation=file:///opt/earnkit/stack/playbooks/sync-team-members.yml
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Environment=HOME=/var/lib/earnkit-runner
+Environment=ANSIBLE_LOCAL_TEMP=/tmp/earnkit-ansible
+Environment=ANSIBLE_REMOTE_TEMP=/tmp/earnkit-ansible
+Environment=ANSIBLE_CONFIG=/opt/earnkit/stack/ansible.cfg
+Environment=ANSIBLE_COLLECTIONS_PATH=/opt/earnkit/collections
+ExecStartPre=/bin/mkdir -p /tmp/earnkit-ansible
+ExecStartPre=/bin/chmod 1777 /tmp/earnkit-ansible
+ExecStart=/opt/earnkit/ansible-venv/bin/ansible-playbook -i /opt/earnkit/stack/inventory-local /opt/earnkit/stack/playbooks/sync-team-members.yml
+# idempotent + one-at-a-time by nature; don't let a slow run overlap the timer
+TimeoutStartSec=600
