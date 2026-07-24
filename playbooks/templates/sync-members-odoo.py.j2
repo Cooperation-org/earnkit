@@ -8,8 +8,10 @@
 # accounts_user.auth_provider_id. Pre-creating the user with that pair makes
 # the first OIDC login resolve to THIS user instead of a signup.
 #
-# Idempotent: creates or links only. Never removes a group, never overwrites
-# a different existing oauth_uid, never deactivates or reactivates anyone.
+# Idempotent: creates, links, or promotes. The ONLY group it ever removes is a
+# mutually-exclusive Portal/Public user-type, and only when promoting an existing
+# user to internal (Odoo forbids more than one user type). Never overwrites a
+# different existing oauth_uid, never deactivates or reactivates anyone.
 import base64
 import json
 import sys
@@ -66,10 +68,27 @@ for m in members:
     if not user.active:
         print("skip: %s is deactivated — leaving untouched" % email)
         continue
+    # Odoo user-type groups (internal/portal/public) are mutually exclusive. When
+    # we grant internal (base.group_user) to a user who currently exists as Portal
+    # or Public — e.g. they signed up via another OIDC/OAuth flow before joining
+    # the team — the conflicting type MUST be dropped in the same write, or
+    # res.users._check_one_user_type raises "cannot have more than one user types".
+    drop_type_ids = []
+    group_user = env.ref('base.group_user', raise_if_not_found=False)
+    if group_user is not None and group_user in groups:
+        for _type_xmlid in ('base.group_portal', 'base.group_public'):
+            _tg = env.ref(_type_xmlid, raise_if_not_found=False)
+            if _tg is not None and _tg in user.groups_id:
+                drop_type_ids.append(_tg.id)
     missing = [g.id for g in groups if g not in user.groups_id]
-    if missing:
-        user.write({'groups_id': [(4, gid) for gid in missing]})
-        print("changed: granted %d missing group(s) to %s" % (len(missing), email))
+    if missing or drop_type_ids:
+        commands = [(4, gid) for gid in missing] + [(3, gid) for gid in drop_type_ids]
+        user.write({'groups_id': commands})
+        if drop_type_ids:
+            print("changed: promoted %s to internal (dropped Portal/Public type), "
+                  "granted %d group(s)" % (email, len(missing)))
+        else:
+            print("changed: granted %d missing group(s) to %s" % (len(missing), email))
         changed += 1
 
 env.cr.commit()
