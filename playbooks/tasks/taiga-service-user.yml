@@ -1,0 +1,100 @@
+---
+# earnkit — the Taiga account amebo logs in as, and its membership of ONE
+# team's board.
+#
+# Two halves, both idempotent, both in one file because they are one fact:
+#   1. the account itself (global — one user for the whole Taiga install)
+#   2. its membership of the team's project (per team)
+#
+# Why a password and not the Application token already in the inventory: amebo
+# drives Taiga through the shared `mcp-taiga` CLI, which authenticates with a
+# username and password and mints/refreshes a JWT itself. Taiga's Application
+# tokens use a different auth scheme that CLI does not speak, so handing it
+# that token produces 401s.
+#
+# Least privilege on purpose: NOT a superuser. amebo reaches a team's board
+# because it is a member of that board, so a bug or a bad prompt cannot walk
+# into a team it was never added to. (The tool layer pins the project too —
+# TAIGA_TEAM_PROJECT_PATTERN in amebo's env — this is the same rule enforced
+# again by the server, which is the half that cannot be talked out of.)
+#
+# Requires: team_slug, amebo_taiga_service_login / _password / _email.
+
+- name: "Taiga: amebo service account + membership of board {{ team_slug }}"
+  ansible.builtin.shell:
+    cmd: |
+      /opt/taiga/venv/bin/python /opt/taiga/taiga-back/manage.py shell <<'PY'
+      import os
+      from django.apps import apps
+
+      User = apps.get_model("users", "User")
+      Project = apps.get_model("projects", "Project")
+      Membership = apps.get_model("projects", "Membership")
+
+      login = os.environ["SVC_LOGIN"]
+      email = os.environ["SVC_EMAIL"]
+      role_slug = os.environ["SVC_ROLE"]
+      slug = os.environ["SVC_PROJECT"]
+
+      user = User.objects.filter(username__iexact=login).first()
+      created = user is None
+      if created:
+          user = User(username=login, email=email)
+      # Same create conventions as the OIDC adapter (see
+      # templates/sync-members-taiga.py.j2): a verified address, terms read, so
+      # Taiga never holds the account back behind a confirmation step.
+      user.email = email
+      user.full_name = os.environ["SVC_NAME"]
+      user.is_active = True
+      user.verified_email = True
+      user.read_new_terms = True
+      # Rewritten every run so Taiga and amebo's environment cannot drift apart.
+      user.set_password(os.environ["SVC_PASSWORD"])
+      user.save()
+
+      project = Project.objects.filter(slug=slug).first()
+      if project is None:
+          print("FAIL: no taiga project '%s'" % slug)
+          raise SystemExit(1)
+      role = project.roles.filter(slug=role_slug).first()
+      if role is None:
+          print("FAIL: project '%s' has no role slug '%s' (available: %s)"
+                % (slug, role_slug,
+                   ", ".join(sorted(r.slug for r in project.roles.all())) or "none"))
+          raise SystemExit(1)
+      membership, m_created = Membership.objects.get_or_create(
+          project=project, user=user,
+          defaults=dict(role=role, email=user.email, is_admin=False))
+      print("user=%s membership=%s"
+            % ("created" if created else "updated",
+               "created" if m_created else "exists"))
+      PY
+  args:
+    chdir: /opt/taiga/taiga-back
+  # taiga-back's manage.py defaults to settings.common (localhost DB); the real
+  # DB host lives in settings.config, which the taiga-back service selects via
+  # this same env var. become_user does not inherit the unit's Environment=.
+  environment:
+    DJANGO_SETTINGS_MODULE: settings.config
+    SVC_LOGIN: "{{ amebo_taiga_service_login }}"
+    SVC_PASSWORD: "{{ amebo_taiga_service_password }}"
+    SVC_EMAIL: "{{ amebo_taiga_service_email }}"
+    SVC_NAME: "{{ amebo_taiga_service_name | default('amebo (agent)') }}"
+    SVC_ROLE: "{{ taiga_member_role_slug | default('back') }}"
+    SVC_PROJECT: "{{ team_slug }}"
+  become_user: taiga
+  register: amebo_taiga_user
+  changed_when: "'created' in amebo_taiga_user.stdout | default('')"
+  no_log: true   # carries the service password in its env
+  failed_when: false
+
+- name: "STOP — could not give amebo access to board {{ team_slug }}"
+  ansible.builtin.fail:
+    msg: >-
+      manage.py shell exited {{ amebo_taiga_user.rc | default('?') }} for board
+      '{{ team_slug }}'. amebo's taiga_* tools will fail for this team until it
+      succeeds. {{ amebo_taiga_user.stdout | default('') | truncate(300) }}
+      {{ amebo_taiga_user.stderr | default('') | truncate(400) }}
+  when: >-
+    (amebo_taiga_user.rc | default(1)) != 0
+    or 'FAIL:' in (amebo_taiga_user.stdout | default(''))

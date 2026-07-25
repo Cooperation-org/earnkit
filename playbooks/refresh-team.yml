@@ -1,0 +1,68 @@
+---
+# earnkit — give an EXISTING team everything add-team.yml has learned to set up
+# since that team was created.
+#
+# Why this exists: add-team.yml refuses to run for a team whose crm-<slug>
+# already exists, and rightly so — the cluster is shared, and pointing Odoo at
+# a database that may hold someone else's data is not a risk worth taking for a
+# re-run. But that guard also means every team created before a given
+# improvement never receives it. The first team on the cohort VM (vc) has no
+# identity prompt, no tool list, and no service accounts for that reason alone.
+#
+# So this play does the part that is safe to repeat and leaves the part that is
+# not. It NEVER creates or initialises a database, never brands one, never
+# touches the OIDC provider row, never mints an invite. It only writes accounts
+# and configuration whose meaning does not depend on what the database already
+# holds.
+#
+# Idempotent. Safe to re-run. Safe to run for a team that is already correct.
+#
+# Usage:
+#   ansible-playbook -i <inventory> playbooks/refresh-team.yml \
+#     -e team_slug=vc -e team_name='Workers.vc'
+- name: Refresh an existing cohort team
+  hosts: cohort
+  become: true
+  vars_files:
+    - vars/amebo-team-defaults.yml
+
+  pre_tasks:
+    - name: Validate team vars
+      ansible.builtin.assert:
+        that:
+          - team_slug is match('^[a-z0-9][a-z0-9-]{1,30}$')
+          - team_name | length > 1
+        fail_msg: "Pass -e team_slug=<slug> -e team_name='<Display Name>'"
+
+    # This play assumes the team is already there. Saying so plainly beats a
+    # confusing failure three tasks in.
+    - name: "Check the team's CRM database exists"
+      community.postgresql.postgresql_query:
+        login_host: "{{ database_host }}"
+        login_port: "{{ database_port }}"
+        login_user: "{{ database_admin_user }}"
+        login_password: "{{ database_admin_password }}"
+        db: postgres
+        query: "SELECT 1 FROM pg_database WHERE datname = %(name)s"
+        named_args:
+          name: "crm-{{ team_slug }}"
+      register: crm_db_probe
+      no_log: true
+
+    - name: "STOP — no team '{{ team_slug }}' to refresh"
+      ansible.builtin.fail:
+        msg: >-
+          Database crm-{{ team_slug }} does not exist. This play refreshes a
+          team that is already provisioned; a NEW team is created by
+          playbooks/add-team.yml.
+      when: (crm_db_probe.query_result | default([]) | length) == 0
+
+  tasks:
+    - name: "Odoo: amebo service account"
+      ansible.builtin.import_tasks: tasks/odoo-service-user.yml
+
+    - name: "Taiga: amebo service account"
+      ansible.builtin.import_tasks: tasks/taiga-service-user.yml
+
+    - name: "amebo: instance identity + tool list"
+      ansible.builtin.import_tasks: tasks/amebo-instance.yml

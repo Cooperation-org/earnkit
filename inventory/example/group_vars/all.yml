@@ -140,6 +140,27 @@ amebo_cors_origins: "https://{{ workersvc_domain }},https://{{ amebo_domain }}"
 # PLAN-cohort-dash.md, SSO-once addition). Empty allows FRONTEND_URL only:
 amebo_oidc_next_allowed_origins: "https://{{ workersvc_domain }}"
 
+# The two accounts amebo acts THROUGH. Its CRM and board tools are not special
+# clients: they log in like a person does, so without these they hold nothing
+# to authenticate with and answer "CRM not configured" / fail on every board
+# call. Both are created by add-team.yml (and by refresh-team.yml for teams
+# that predate it) and both are deliberately ordinary accounts, not admins.
+#
+# Odoo: one user of this login inside EVERY crm-<slug> database (a user exists
+# in one database only). Rights: internal user, all leads, contact manager.
+amebo_odoo_service_login: "amebo"
+amebo_odoo_service_password: "VAULT-ME"
+amebo_odoo_service_name: "amebo (agent)"
+# Taiga: ONE user, added as a member of each team's board. mcp-taiga — the CLI
+# the taiga_* tools drive — logs in with a password and mints its own JWT, so
+# the inventory's Application token (taiga_api_token, which GovKit uses) does
+# not fit here. Membership, not superuser: Taiga itself then keeps amebo out of
+# boards it was never added to.
+amebo_taiga_service_login: "amebo"
+amebo_taiga_service_password: "VAULT-ME"
+amebo_taiga_service_email: "amebo@{{ cohort_domain }}"
+amebo_taiga_service_name: "amebo (agent)"
+
 # ---------------------------------------------------------------------------
 # GovKit (earned governance) — from source
 # ---------------------------------------------------------------------------
