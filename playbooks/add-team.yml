@@ -43,6 +43,7 @@
       - taiga_add_comment
       - taiga_close_task
       # the team's own CRM (Odoo database created above)
+      - odoo_search
       - crm_list_contacts
       - crm_list_leads
       - crm_recent_activity
