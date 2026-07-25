@@ -47,6 +47,7 @@
           slug: "{{ team_slug }}"
         status_code: [200, 201, 204, 404, 409]   # 404/409 = already gone; idempotent
       when: caddy_api_token | default('') | length > 0
+      no_log: true   # Authorization header carries the Caddy API token
 
     # ---- amebo: remove the instance row (always; reversible) ------------------
     # The instance row is what makes the team visible/active in amebo's dash.

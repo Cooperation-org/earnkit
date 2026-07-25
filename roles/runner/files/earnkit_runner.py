@@ -108,9 +108,27 @@ def _all_jobs() -> list[dict]:
     return jobs
 
 
-def _slug_busy(slug: str) -> bool:
+def _same_job_pending(action: str, slug: str) -> bool:
+    """Is an identical job (same action, same team) already queued or running?
+
+    Deduplication, NOT concurrency control — the single worker thread below is
+    what makes runs safe against each other, and it always has been. This check
+    only stops a pile-up of identical requests (e.g. three people accepting an
+    invite at once queueing three syncs of the same team).
+
+    It used to match on slug ALONE, which quietly broke the fast path it was
+    supposed to protect: a founder accept queues add-team, amebo then asks for
+    that team's member sync, and the sync was refused with 409 because add-team
+    was still running for the same slug. add-team does not sync members, so the
+    founder simply sat un-provisioned until the ~5-minute timer swept them up.
+    Different actions must be allowed to queue; the worker runs them in order,
+    so the sync lands right after the stack it depends on is up.
+    """
     return any(
-        j["team_slug"] == slug and j["state"] in ("queued", "running") for j in _all_jobs()
+        j["team_slug"] == slug
+        and j.get("action", "add-team") == action
+        and j["state"] in ("queued", "running")
+        for j in _all_jobs()
     )
 
 
@@ -196,8 +214,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _enqueue(self, action: str, slug: str, name: str):
         with _lock:
-            if _slug_busy(slug):
-                return self._send(409, {"error": f"a job for '{slug}' is already queued/running"})
+            if _same_job_pending(action, slug):
+                return self._send(
+                    409,
+                    {"error": f"a {action} job for '{slug}' is already queued/running"},
+                )
             job = {
                 "job_id": uuid.uuid4().hex,
                 "action": action,

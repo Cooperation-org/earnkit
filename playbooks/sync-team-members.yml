@@ -161,7 +161,15 @@
       become_user: odoo
       register: odoo_sync
       changed_when: "'changed:' in odoo_sync.stdout"
-      failed_when: odoo_sync.rc != 0 or 'SYNC-RESULT ok' not in odoo_sync.stdout
+      # Do NOT fail the task here. Failing it ends the play, and the Taiga sync
+      # below never runs — so ONE team's broken or half-migrated CRM database
+      # blocked Taiga membership for EVERY team. The two systems are
+      # independent: a member needs only an email for Taiga, and Odoo's failure
+      # tells us nothing about whether Taiga can be synced. Per-team results are
+      # judged in the final task, which fails the run after BOTH systems have
+      # had their turn, so nothing is swept under the rug — the job still exits
+      # non-zero and the operator sees exactly which team broke where.
+      failed_when: false
 
     # ---- Taiga: user (email-matched) + project membership ------------------
     # Same manage.py shell pattern as add-team.yml's project task (piped
@@ -188,12 +196,45 @@
       become_user: taiga
       register: taiga_sync
       changed_when: "'changed:' in taiga_sync.stdout"
-      failed_when: taiga_sync.rc != 0 or 'SYNC-RESULT ok' not in taiga_sync.stdout
+      # Same reasoning as the Odoo task above: judged at the end, not here, so
+      # one team's failure cannot decide the fate of the others.
+      failed_when: false
 
     - name: "Summary: per-team sync results"
       ansible.builtin.debug:
         msg: |
-          {% for r in odoo_sync.results %}crm-{{ r.item }}: {{ r.stdout_lines | select('match', '^(changed|skip|SYNC-RESULT)') | join('; ') }}
+          {% for r in odoo_sync.results %}crm-{{ r.item }}: {{ r.stdout_lines | default([]) | select('match', '^(changed|skip|SYNC-RESULT)') | join('; ') }}
           {% endfor %}
-          {% for r in taiga_sync.results %}taiga {{ r.item }}: {{ r.stdout_lines | select('match', '^(changed|skip|SYNC-RESULT)') | join('; ') }}
+          {% for r in taiga_sync.results %}taiga {{ r.item }}: {{ r.stdout_lines | default([]) | select('match', '^(changed|skip|SYNC-RESULT)') | join('; ') }}
           {% endfor %}
+
+    # ---- Now judge both systems, per team ---------------------------------
+    # The success contract is unchanged — rc 0 AND the script's own
+    # 'SYNC-RESULT ok' marker. Only WHEN it is applied moved: after both systems
+    # have run, so one team's failure cannot cost every other team its Taiga
+    # membership. Each failure is named (team + system) and the run still exits
+    # non-zero, so the runner's job state and the timer stay honest.
+    # A team+system is bad when the command failed or its script never printed
+    # the 'SYNC-RESULT ok' marker. Built as a report block (Jinja has no list
+    # comprehensions); empty means everything succeeded.
+    - name: Collect per-team sync failures
+      ansible.builtin.set_fact:
+        sync_failures: |-
+          {% for r in odoo_sync.results | default([]) %}
+          {% if r.rc | default(1) != 0 or 'SYNC-RESULT ok' not in (r.stdout | default('')) %}
+          odoo  crm-{{ r.item }}: rc={{ r.rc | default('n/a') }} — {{ (r.stdout_lines | default(['(no output)']))[-2:] | join(' / ') }}
+          {% endif %}
+          {% endfor %}
+          {% for r in taiga_sync.results | default([]) %}
+          {% if r.rc | default(1) != 0 or 'SYNC-RESULT ok' not in (r.stdout | default('')) %}
+          taiga {{ r.item }}: rc={{ r.rc | default('n/a') }} — {{ (r.stdout_lines | default(['(no output)']))[-2:] | join(' / ') }}
+          {% endif %}
+          {% endfor %}
+
+    - name: "STOP — member sync failed for one or more teams"
+      ansible.builtin.fail:
+        msg: |
+          Member sync did not complete cleanly. Both systems were attempted for
+          every team, so the failures below did not block anybody else:
+          {{ sync_failures }}
+      when: sync_failures | trim | length > 0

@@ -269,8 +269,30 @@
           name: "{{ team_name }}"
           source: "add-team"
           members: []
-        status_code: 200
       register: amebo_org
+      # The Authorization header holds the amebo S2S token, and uri echoes its
+      # own arguments back in the task result (`headers` is a free-form dict, so
+      # unlike a module's declared password parameters it is NOT redacted) — so
+      # without this the token went in clear text into the runner's job log and
+      # the journal on every failed add-team, where anyone reading logs could
+      # lift it. register still works under no_log.
+      no_log: true
+      # no_log hides the REASON a call failed too, and this one failing is a
+      # normal operational event people need to read. So do not fail here: judge
+      # the result in the next task, which sees the status and body but never the
+      # headers, and can therefore say what went wrong out loud.
+      failed_when: false
+
+    - name: "STOP — amebo would not register org {{ team_slug }}"
+      ansible.builtin.fail:
+        msg: >-
+          amebo refused to provision org '{{ team_slug }}'
+          (HTTP {{ amebo_org.status | default('no response') }}).
+          {{ amebo_org.json | default(amebo_org.msg) | default('') | string | truncate(400) }}
+          Nothing else in the team stack can be built without the org_id it
+          returns. Check amebo's own log, AMEBO_S2S_TOKEN on both sides, and
+          that the LEGACY_ENV_ORG_ID pin is set (it answers 503 when it is not).
+      when: amebo_org.status | default(0) != 200
 
     # ---- amebo: one instance row per team ---------------------------------
     # org_id is REQUIRED. amebo's dashboard endpoints (e.g. /api/organizations/
@@ -376,3 +398,4 @@
           slug: "{{ team_slug }}"
         status_code: [200, 201]
       when: caddy_api_token | default('') | length > 0
+      no_log: true   # Authorization header carries the Caddy API token

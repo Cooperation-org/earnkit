@@ -71,6 +71,11 @@
     dest: /opt/earnkit/stack/inventory-local/group_vars/cohort.yml
     mode: "0600"
   notify: restart earnkit-runner
+  # Every live credential is in this file (amebo S2S, Odoo/amebo DB passwords,
+  # Taiga and Caddy tokens). A deploy run with --diff prints the whole rendered
+  # body, so the file's 0600 mode would be the only thing protecting secrets
+  # that had already been echoed to the terminal and journal.
+  no_log: true
 
 - name: ansible venv for local runs
   ansible.builtin.pip:
@@ -129,6 +134,9 @@
       RUNNER_PORT={{ runner_port }}
       RUNNER_STATE_DIR={{ runner_state_dir }}
   notify: restart earnkit-runner
+  # copy reports its own `content` back in the task result, so the runner token
+  # was printed in clear text by every deploy that changed this file.
+  no_log: true
 
 - name: systemd unit
   ansible.builtin.template:
