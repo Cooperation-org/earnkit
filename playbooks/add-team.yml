@@ -13,6 +13,67 @@
   vars:
     team_slug: ""     # required, [a-z0-9-]
     team_name: ""     # required, display name
+
+    # What the team's amebo may do for a plain MEMBER. Nothing outside this list
+    # exists as far as that instance is concerned — registering a tool in amebo's
+    # code is not enough, the instance has to allow it. The row used to be
+    # created with an empty list, which is why a brand-new team's amebo could
+    # only fall back to the three built-in defaults (search_knowledge_base,
+    # search_slack_history, lookup_contact) and could not touch the board or CRM
+    # that this very playbook had just built for them.
+    #
+    # Admins are separate: on this VM every org runs on the VM's own shared
+    # credentials, so amebo's registry gives an org admin the full suite already
+    # (tools/registry.py _admin_defaults_to_everything). This list is what the
+    # REST of the team gets.
+    #
+    # Deliberately excluded, not forgotten: crm_read_latest_email (reads a
+    # person's mail), odoo_cli / http_fetch / file_skill (arbitrary
+    # command/URL/file reach), slack_post (posts in the team's name). Add them
+    # per-team, on purpose, in the inventory — not by default for everyone.
+    # Also excluded: abra_search and the project-doc tools (list_projects,
+    # read_main_md, edit_main_md), which need ABRA_DATABASE_URL and the shared
+    # projects repo present on this VM. Granting a tool whose backing store is
+    # absent just produces errors, so those stay off until the store is wired.
+    amebo_team_allowed_tools:
+      # the team's own board (Taiga project created above)
+      - taiga_list
+      - taiga_create_task
+      - taiga_update_task
+      - taiga_add_comment
+      - taiga_close_task
+      # the team's own CRM (Odoo database created above)
+      - crm_list_contacts
+      - crm_list_leads
+      - crm_recent_activity
+      - crm_create_contact
+      - crm_log_contacted
+      - crm_tag_contact
+      - crm_schedule
+      # asking about the world
+      - web_search
+
+    # The instance's system prompt. NULL means amebo falls back to its generic
+    # default, so a new team's agent knew nothing about the team or where the
+    # team's facts live. One home per fact — the same map the whatscookin
+    # instance carries (see amebo docs/BOUNDARIES.md): amebo acts, it is never
+    # the database.
+    amebo_team_identity_prompt: |
+      You are amebo for {{ team_name }}, a team in the Earned Equity Accelerator.
+
+      Search before you ask, and answer from the team's own records rather than
+      from memory. Each fact has exactly one home, and you only reference it:
+
+        - tasks, who is doing what, deadlines -> this team's Taiga board
+          (project "{{ team_slug }}"), via the taiga_* tools
+        - people the team is talking to, outreach, leads -> this team's CRM,
+          via the crm_* tools
+        - anything about the world outside the team -> web_search
+
+      Work is what earns equity here, and the board is the record of it: when
+      someone asks what they have earned or what is left to do, the board is the
+      answer, not an estimate. Never invent a task, a contact, or a number. If
+      the record does not say, say that it does not say.
   pre_tasks:
     - name: Validate team vars
       ansible.builtin.assert:
@@ -216,6 +277,13 @@
     # links, /board) select `FROM instances WHERE org_id = %s`, so an instance
     # with a NULL org_id is invisible to them and the dash renders empty rows
     # with no error. It was omitted here originally.
+    #
+    # Upsert, not insert-if-absent: the old form skipped the row entirely when
+    # the slug existed, so a team created before this playbook set an identity
+    # prompt and a tool list stayed permanently toolless and a re-run could not
+    # repair it. Filling in is safe and clobbering is not, so each field is only
+    # written when it is EMPTY — an instance somebody has since tuned by hand
+    # keeps exactly what they set.
     - name: "amebo: instance row for {{ team_slug }}"
       community.postgresql.postgresql_query:
         login_host: "{{ database_host }}"
@@ -224,13 +292,25 @@
         login_password: "{{ amebo_db_password }}"
         db: "{{ amebo_db_name }}"
         query: >
-          INSERT INTO instances (name, slug, org_id, config)
-          SELECT %(name)s, %(slug)s, %(org_id)s, '{"allowed_tools": []}'::jsonb
-          WHERE NOT EXISTS (SELECT 1 FROM instances WHERE slug = %(slug)s)
+          INSERT INTO instances (name, slug, org_id, identity_prompt, config)
+          VALUES (%(name)s, %(slug)s, %(org_id)s, %(identity_prompt)s,
+                  jsonb_build_object('allowed_tools', %(allowed_tools)s::jsonb))
+          ON CONFLICT (slug) DO UPDATE SET
+              org_id = COALESCE(instances.org_id, EXCLUDED.org_id),
+              identity_prompt = COALESCE(NULLIF(instances.identity_prompt, ''),
+                                         EXCLUDED.identity_prompt),
+              config = CASE
+                  WHEN COALESCE(jsonb_array_length(instances.config -> 'allowed_tools'), 0) = 0
+                  THEN COALESCE(instances.config, '{}'::jsonb) || EXCLUDED.config
+                  ELSE instances.config
+              END,
+              updated_at = NOW()
         named_args:
           name: "{{ team_name }}"
           slug: "{{ team_slug }}"
           org_id: "{{ amebo_org.json.org_id }}"
+          identity_prompt: "{{ amebo_team_identity_prompt }}"
+          allowed_tools: "{{ amebo_team_allowed_tools | to_json }}"
 
     # ---- GovKit: one org per team ------------------------------------------
     - name: "GovKit: org {{ team_slug }}"
