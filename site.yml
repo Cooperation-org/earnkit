@@ -12,6 +12,9 @@
     - { role: marten,   tags: [marten] }
     - { role: odoo,     tags: [odoo] }
     - { role: amebo,    tags: [amebo] }
+    # After amebo: the CLIs its tools shell out to are installed for, and
+    # smoke-tested as, the amebo user, which the amebo role creates.
+    - { role: agent-clis, tags: [agent-clis, amebo] }
     - { role: govkit,   tags: [govkit] }
     - { role: workersvc, tags: [workersvc] }
     - { role: runner,   tags: [runner] }

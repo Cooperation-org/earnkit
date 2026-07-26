@@ -1,0 +1,24 @@
+---
+# roles/agent-clis — role defaults.
+#
+# The two command-line tools amebo's tool layer shells out to. They are not
+# optional extras: every taiga_* tool and every CRM write in amebo runs one of
+# these binaries, so on a box without them those tools fail no matter what
+# credentials or allowed_tools a team has.
+
+agent_clis_dir: /opt/agent-clis
+agent_clis_bin_dir: /usr/local/bin
+
+# mcp-taiga — the whole repo (it is a python package with its own venv).
+mcp_taiga_repo: git@github.com:Cooperation-org/mcp-taiga.git
+mcp_taiga_branch: main
+
+# odoo-cli — ONE script that lives in the team's ops repo. Only scripts/ is
+# checked out (see tasks/main.yml); the rest of that repo documents the whole
+# estate and has no business on a cohort VM.
+cobox_repo: git@github.com:Cooperation-org/cobox.git
+cobox_branch: main
+# Leading and trailing slashes matter: this is a --no-cone pattern, which is
+# what limits the checkout to this ONE directory. Cone mode (the default) would
+# also lay down every file at the repo root.
+cobox_sparse_paths: /scripts/

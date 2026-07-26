@@ -84,8 +84,9 @@ service's port is a variable — see `inventory/example/group_vars/all.yml`).
 ## Layout
 
 ```
-site.yml                  # the full-stack playbook (tags: base,rabbitmq,taiga,marten,odoo,amebo,govkit,workersvc,cicd,nginx)
+site.yml                  # the full-stack playbook (tags: base,rabbitmq,taiga,marten,odoo,amebo,agent-clis,govkit,workersvc,cicd,nginx)
 playbooks/add-team.yml    # per-team provisioning (team-level resources ONLY, never individual users)
+playbooks/refresh-team.yml # give an EXISTING team what add-team has learned since (never touches its database)
 playbooks/sync-team-members.yml  # reconcile GovKit members -> team CRM users + Taiga memberships
 playbooks/upgrade-crm-addons.yml # odoo-bin -u for the custom addons across every team database
 roles/                    # one role per concern; no app code

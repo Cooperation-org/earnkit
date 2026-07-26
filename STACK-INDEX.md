@@ -73,7 +73,7 @@ Known gaps: register tab calls a method that doesn't exist (throws), dead client
 
 ## earnkit — composition (this repo)
 
-- `site.yml`: base → rabbitmq → taiga → marten → odoo → amebo → govkit → workersvc → nginx → cicd. All state on external Postgres (`database_host`).
+- `site.yml`: base → rabbitmq → taiga → marten → odoo → amebo → agent-clis → govkit → workersvc → nginx → cicd. All state on external Postgres (`database_host`).
 - `playbooks/add-team.yml -e team_slug=… -e team_name=…` — per-team: Odoo DB `crm-<slug>` + modules + OIDC row + Caddy route, Taiga private project (slug=team), amebo instance row + org provision (S2S), GovKit org. People are NEVER provisioned here — that's amebo's job via GovKit accept.
 - CI/CD: each app repo's `deploy-to-cohort.yml` → ssh `deploy` user → `sudo /opt/earnkit/bin/update-{workersvc,govkit,amebo,marten}` (reset to origin/main, deps, migrate, restart). Taiga/Odoo update by playbook re-run only.
 - docs: DECISIONS.md (hostname scheme, per-service multitenancy, no docker), SSO-AND-TEAMS.md (identity = OIDC sub; membership sync partly unbuilt; launch-gate notes).

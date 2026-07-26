@@ -1,0 +1,138 @@
+---
+# agent-clis — the two CLIs amebo drives: mcp-taiga (the board) and odoo-cli
+# (the CRM). amebo's tools run these as subprocesses, so without them every
+# taiga_* tool, odoo_search, and every CRM write answers with an error however
+# the team's credentials and allowed_tools are set.
+#
+# Both are installed from their own repos and updated on every run: this box
+# never holds an edited copy, so there is nothing here to drift from the source.
+# Needs the shared GitHub deploy key from the base role.
+
+- name: agent CLI dir
+  ansible.builtin.file:
+    path: "{{ agent_clis_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# ---- mcp-taiga ------------------------------------------------------------
+- name: Clone mcp-taiga
+  ansible.builtin.git:
+    repo: "{{ mcp_taiga_repo }}"
+    dest: "{{ agent_clis_dir }}/mcp-taiga"
+    version: "{{ mcp_taiga_branch }}"
+    force: true
+  register: mcp_taiga_clone
+
+# The wrapper resolves its own directory through symlinks and expects the venv
+# beside it, so the venv path is the repo's own .venv — not a path of ours.
+- name: mcp-taiga venv (pinned by the repo's requirements.txt)
+  ansible.builtin.pip:
+    requirements: "{{ agent_clis_dir }}/mcp-taiga/requirements.txt"
+    virtualenv: "{{ agent_clis_dir }}/mcp-taiga/.venv"
+    virtualenv_command: python3 -m venv
+
+- name: mcp-taiga is executable
+  ansible.builtin.file:
+    path: "{{ agent_clis_dir }}/mcp-taiga/mcp-taiga"
+    mode: "0755"
+
+- name: mcp-taiga on PATH
+  ansible.builtin.file:
+    src: "{{ agent_clis_dir }}/mcp-taiga/mcp-taiga"
+    dest: "{{ agent_clis_bin_dir }}/mcp-taiga"
+    state: link
+
+# mcp-taiga caches the JWT it mints back into this file when it exists, and
+# re-authenticates on every single call when it does not. amebo makes one call
+# per tool use, so the file is the difference between one login per session and
+# one login per click. It holds no password — only the URL and, later, a token
+# the CLI wrote itself.
+- name: mcp-taiga token cache for the amebo user
+  ansible.builtin.copy:
+    dest: "{{ amebo_home | default('/opt/amebo') }}/.mcp-taiga.conf"
+    owner: "{{ amebo_user | default('amebo') }}"
+    group: "{{ amebo_user | default('amebo') }}"
+    mode: "0600"
+    force: false      # never clobber a token the CLI has cached
+    content: |
+      # Managed by earnkit (roles/agent-clis) — created once, then owned by
+      # mcp-taiga, which appends the tokens it mints. Credentials come from
+      # amebo's own environment (TAIGA_URL/USERNAME/PASSWORD), not from here.
+      TAIGA_URL={{ amebo_taiga_url | default('https://' ~ taiga_domain) }}
+  when: amebo_taiga_service_password | default('') | length > 0
+
+# ---- odoo-cli -------------------------------------------------------------
+# Sparse checkout on purpose. odoo-cli's home is the ops repo, and keeping it
+# there is what stops a second copy drifting — but that repo also documents the
+# hypervisor, every other VM, and how to reach the databases. A cohort VM gets
+# the one directory it needs and none of that.
+- name: Sparse checkout of the ops repo (scripts/ only)
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      git clone --filter=blob:none --no-checkout --branch "{{ cobox_branch }}" \
+        "{{ cobox_repo }}" "{{ agent_clis_dir }}/cobox"
+      cd "{{ agent_clis_dir }}/cobox"
+      git sparse-checkout set --no-cone '{{ cobox_sparse_paths }}'
+      git checkout "{{ cobox_branch }}"
+    creates: "{{ agent_clis_dir }}/cobox/.git"
+    # set -o pipefail is not POSIX sh, and /bin/sh here is dash.
+    executable: /bin/bash
+
+- name: Update the ops repo checkout
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      cd "{{ agent_clis_dir }}/cobox"
+      before=$(git rev-parse HEAD)
+      git fetch --quiet origin "{{ cobox_branch }}"
+      git reset --quiet --hard "origin/{{ cobox_branch }}"
+      after=$(git rev-parse HEAD)
+      [ "$before" = "$after" ] || echo CHANGED
+    executable: /bin/bash
+  register: cobox_update
+  changed_when: "'CHANGED' in cobox_update.stdout"
+
+- name: odoo-cli on PATH
+  ansible.builtin.file:
+    src: "{{ agent_clis_dir }}/cobox/scripts/odoo-cli.sh"
+    dest: "{{ agent_clis_bin_dir }}/odoo-cli"
+    state: link
+
+# ---- prove they are actually usable ---------------------------------------
+# A symlink existing says nothing about whether the thing runs. Both are checked
+# from the account amebo's subprocesses run as, because that is the only place
+# it matters — a tool that only works as root is a tool that does not work.
+- name: Both CLIs run as the amebo user
+  ansible.builtin.command:
+    argv: ["{{ item }}", "--help"]
+  become_user: "{{ amebo_user | default('amebo') }}"
+  changed_when: false
+  # odoo-cli --help prints usage and exits 1, so a non-zero exit proves nothing
+  # here. What is being checked is narrower: that the binary exists and can be
+  # executed by this user at all.
+  failed_when: false
+  register: cli_smoke
+  loop:
+    - "{{ agent_clis_bin_dir }}/mcp-taiga"
+    - "{{ agent_clis_bin_dir }}/odoo-cli"
+
+- name: "STOP — a CLI amebo needs will not run"
+  ansible.builtin.fail:
+    msg: >-
+      {{ item.item }} could not be executed as
+      {{ amebo_user | default('amebo') }}. amebo's board and CRM tools call it
+      by name, so they will fail until this works.
+      {{ (item.msg | default('')) }} {{ (item.stderr | default('')) | truncate(300) }}
+  loop: "{{ cli_smoke.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  # Not "did it exit 0" — "could it be run at all": no rc means the command
+  # module never got to start it, and 126/127 are the shell's own no-such-file
+  # and not-executable.
+  when: >-
+    item.rc is not defined
+    or item.rc in [126, 127]
+    or 'no such file' in (item.msg | default('') | lower)
