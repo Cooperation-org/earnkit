@@ -40,5 +40,15 @@ govkit_fernet_key: ""
 # cross-origin API access — safe fallback for inventories predating the dash.
 govkit_cors_origins: ""
 
+# --- outbound mail (venture-interest notifications) -------------------------------
+# All empty (the default) = GovKit sends no mail at all; the dash Activity rail
+# carries the signal instead. Set smtp_host + email_from (plus creds) in
+# group_vars to turn notifications on — no code change involved.
+govkit_smtp_host: ""
+govkit_smtp_port: 587
+govkit_smtp_user: ""
+govkit_smtp_password: ""
+govkit_email_from: ""
+
 # --- derived (do not override) ----------------------------------------------------
 govkit_database_url: "postgres://{{ govkit_db_user }}:{{ govkit_db_password | urlencode }}@{{ database_host }}:{{ database_port }}/{{ govkit_db_name }}"
