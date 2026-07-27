@@ -13,6 +13,15 @@
 # idempotent (odoo-bin -u reloads a module's data against its current source).
 set -euo pipefail
 
+# --- 0. serialize concurrent deploys ----------------------------------------
+# Each addon repo has its own push-triggered workflow, and every invocation
+# converges ALL addons and ALL databases. Two pushes landing together would ssh
+# in and run two `odoo-bin -u` against the same database at once, corrupting the
+# upgrade. Take an exclusive lock and wait (up to 10 min) rather than racing.
+LOCK=/run/lock/earnkit-update-crm-addons.lock
+exec 9>"$LOCK" 2>/dev/null || { LOCK=/tmp/earnkit-update-crm-addons.lock; exec 9>"$LOCK"; }
+flock -w 600 9 || { echo "another update-crm-addons holds $LOCK; gave up after 600s"; exit 1; }
+
 ODOO_USER={{ odoo_user }}
 CONF={{ odoo_conf_dir }}/odoo.conf
 PY={{ odoo_venv_dir }}/bin/python
