@@ -31,7 +31,10 @@ Design rules (settled — see `docs/DECISIONS.md`):
 - **CI/CD per tool.** The playbook provisions a restricted `deploy` user and
   per-tool update scripts; each of our tool repos adds a small GitHub Actions
   workflow (samples in `cicd/workflow-samples/`) that deploys on merge to main
-  or manual dispatch. Third-party tools (Taiga, Odoo) update via playbook re-run.
+  or manual dispatch. The custom Odoo addons deploy the same way: their
+  workflow calls `update-crm-addons`, which refreshes every addon checkout and
+  runs `odoo-bin -u` against every team database. Odoo and Taiga themselves
+  update via playbook re-run.
 - **No secrets in git.** `inventory/example/` carries sample values only; your
   real inventory lives outside the repo or in Ansible Vault.
 
@@ -89,6 +92,7 @@ playbooks/add-team.yml    # per-team provisioning (team-level resources ONLY, ne
 playbooks/refresh-team.yml # give an EXISTING team what add-team has learned since (never touches its database)
 playbooks/sync-team-members.yml  # reconcile GovKit members -> team CRM users + Taiga memberships
 playbooks/upgrade-crm-addons.yml # odoo-bin -u for the custom addons across every team database
+                          #   (the same work an addon repo's push triggers via /opt/earnkit/bin/update-crm-addons)
 roles/                    # one role per concern; no app code
 inventory/example/        # documented sample inventory — copy it out, never commit real values
 cicd/workflow-samples/    # GitHub Actions deploy workflows to drop into tool repos

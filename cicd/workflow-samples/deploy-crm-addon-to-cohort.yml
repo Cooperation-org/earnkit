@@ -1,0 +1,27 @@
+# Deploys on merge to master via earnkit's restricted deploy user
+# (see Cooperation-org/earnkit roles/cicd). The update script refreshes EVERY
+# custom addon checkout on the cohort VM and runs odoo-bin -u for the custom
+# modules against every team CRM database, then restarts odoo — so a push here
+# lands in every team's CRM, not just one.
+#
+# Repo secrets (same values as the workers.vc / govkit / amebo repos):
+#   COHORT_SSH_HOST, COHORT_SSH_PORT, COHORT_SSH_KEY
+name: Deploy to cohort VM
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via earnkit update script
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.COHORT_SSH_HOST }}
+          port: ${{ secrets.COHORT_SSH_PORT }}
+          username: deploy
+          key: ${{ secrets.COHORT_SSH_KEY }}
+          script: sudo /opt/earnkit/bin/update-crm-addons

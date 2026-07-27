@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# earnkit CI/CD: refresh the custom Odoo addon checkouts and upgrade every
+# custom module in every team CRM database.
+#
+# Called by each addon repo's GitHub Actions workflow on push to its default
+# branch (deploy-to-cohort.yml -> ssh deploy@cohort -> sudo this script), and
+# safe to run by hand. Equivalent to a git pull under the addons dir followed
+# by playbooks/upgrade-crm-addons.yml, without needing an ansible controller.
+#
+# Takes NO arguments on purpose: the sudoers whitelist lists this path bare,
+# and a bare whitelisted command accepts ANY arguments from the caller. So the
+# script must not read $@. It always converges every custom addon, which is
+# idempotent (odoo-bin -u reloads a module's data against its current source).
+set -euo pipefail
+
+ODOO_USER={{ odoo_user }}
+CONF={{ odoo_conf_dir }}/odoo.conf
+PY={{ odoo_venv_dir }}/bin/python
+MODULES="{{ odoo_custom_addons | map(attribute='name') | join(',') }}"
+
+# --- 1. bring every addon checkout to the tip of its pinned branch -----------
+{% for addon in odoo_custom_addons %}
+echo "== fetching {{ addon.name }} ({{ addon.branch | default('main') }})"
+sudo -u "$ODOO_USER" git -C {{ odoo_custom_addons_dir }}/{{ addon.name }} fetch --quiet --prune origin
+sudo -u "$ODOO_USER" git -C {{ odoo_custom_addons_dir }}/{{ addon.name }} reset --hard "origin/{{ addon.branch | default('main') }}"
+{% endfor %}
+
+# --- 2. discover the team databases -----------------------------------------
+# Same rule as roles/odoo/tasks/upgrade-addons.yml: a database is a team CRM
+# only if it is named crm-<slug> AND owned by this install's db_user — the
+# Postgres cluster is shared with unrelated projects, so the name pattern alone
+# is not enough. Credentials come from odoo.conf (root:odoo 0640) so no secret
+# is baked into this script.
+mapfile -t DBS < <("$PY" - "$CONF" <<'PY'
+import configparser
+import sys
+
+import psycopg2
+
+cfg = configparser.ConfigParser()
+cfg.read(sys.argv[1])
+opts = cfg["options"]
+conn = psycopg2.connect(
+    host=opts["db_host"],
+    port=opts["db_port"],
+    user=opts["db_user"],
+    password=opts["db_password"],
+    dbname="postgres",
+)
+with conn.cursor() as cur:
+    cur.execute(
+        """
+        SELECT d.datname FROM pg_database d
+        JOIN pg_roles r ON r.oid = d.datdba
+        WHERE r.rolname = %s AND d.datname ~ '^crm-[a-z0-9-]+$'
+        ORDER BY d.datname
+        """,
+        (opts["db_user"],),
+    )
+    for (name,) in cur.fetchall():
+        print(name)
+PY
+)
+
+if [ "${#DBS[@]}" -eq 0 ]; then
+  echo "no team CRM databases found — nothing to upgrade"
+  exit 0
+fi
+
+# --- 3. upgrade the custom modules in each team database --------------------
+for db in "${DBS[@]}"; do
+  echo "== upgrading $MODULES in $db"
+  sudo -u "$ODOO_USER" "$PY" {{ odoo_source_dir }}/odoo-bin \
+    -c "$CONF" -d "$db" -u "$MODULES" --stop-after-init --no-http
+done
+
+# --- 4. restart -------------------------------------------------------------
+# Odoo's registry signalling usually reloads the routing map on its own, but a
+# module that ADDS an @http.route is exactly the case that has silently kept
+# 404ing here. A deploy should be deterministic, so restart: it costs seconds
+# and this service is the CRM itself, not a shared dependency.
+systemctl restart odoo
+systemctl is-active odoo

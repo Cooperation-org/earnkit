@@ -29,6 +29,7 @@
     mode: "0755"
   loop:
     - amebo
+    - crm-addons
     - govkit
     - marten
     - workersvc
@@ -39,4 +40,4 @@
     mode: "0440"
     validate: visudo -cf %s
     content: |
-      {{ deploy_user }} ALL=(root) NOPASSWD: /opt/earnkit/bin/update-amebo, /opt/earnkit/bin/update-govkit, /opt/earnkit/bin/update-marten, /opt/earnkit/bin/update-workersvc
+      {{ deploy_user }} ALL=(root) NOPASSWD: /opt/earnkit/bin/update-amebo, /opt/earnkit/bin/update-crm-addons, /opt/earnkit/bin/update-govkit, /opt/earnkit/bin/update-marten, /opt/earnkit/bin/update-workersvc
