@@ -94,14 +94,19 @@ odoo_admin_password: "VAULT-ME"           # master password (db management)
 # projects); the crm- prefix plus the slug is what keeps them separate.
 odoo_dbfilter: "^%d$"
 # Custom CRM addons installed into every team database (each addon is its own
-# repo — earnkit composes, never forks). Two more addons exist on our live CRM
-# but are not yet in git (crm_relationship_dashboard, quick_outreach) — add
-# them here once they have repos.
+# repo — earnkit composes, never forks). The code is cloned ONCE per cohort VM
+# into the addons path; a module still has to be installed into each team
+# database separately (add-team.yml does that for a new team via
+# odoo_team_init_modules; playbooks/upgrade-crm-addons.yml only upgrades what a
+# database already has, so an addon added here after a team exists needs
+# odoo-bin -i against that team's database once).
 odoo_custom_addons:
   - { name: crm_card_scanner,   repo: "git@github.com:Cooperation-org/crm-card-scanner.git" }
   - { name: crm_outreach_runner, repo: "git@github.com:Cooperation-org/crm-outreach-runner.git", branch: master }
+  - { name: crm_relationship_dashboard, repo: "git@github.com:Cooperation-org/odoo-crm-relationships.git" }
+  - { name: quick_outreach,     repo: "git@github.com:Cooperation-org/odoo-crm-quick-outreach.git" }
 # Modules initialized in each new team DB (add-team.yml):
-odoo_team_init_modules: "base,crm,auth_oauth,crm_card_scanner,crm_outreach_runner"
+odoo_team_init_modules: "base,crm,auth_oauth,crm_card_scanner,crm_outreach_runner,crm_relationship_dashboard,quick_outreach"
 # Groups every synced team member gets in their team's CRM database
 # (playbooks/sync-team-members.yml). XML ids; base.group_user makes them
 # INTERNAL users, the sales group lets them see and work all leads:
