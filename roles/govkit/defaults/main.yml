@@ -40,6 +40,15 @@ govkit_fernet_key: ""
 # cross-origin API access — safe fallback for inventories predating the dash.
 govkit_cors_origins: ""
 
+# Slug of the org that IS the accelerator (the cohort itself, not a venture).
+# GovKit reads it as ACCELERATOR_ORG_SLUG and it decides three things: the
+# accelerator's Activity rail carries who is joining across the cohort, the
+# mentors page is open to that org's admins (empty = superusers only), and the
+# ventures list stops listing the accelerator as one of its own ventures.
+# Empty leaves all three off. Set it in group_vars — it is the same org the
+# doorway resolves invites for (workersvc_govkit_org_slug).
+govkit_accelerator_org_slug: ""
+
 # --- outbound mail (venture-interest notifications) -------------------------------
 # All empty (the default) = GovKit sends no mail at all; the dash Activity rail
 # carries the signal instead. Set smtp_host + email_from (plus creds) in
