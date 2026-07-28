@@ -78,3 +78,17 @@ taiga_smtp_use_tls: true
 
 # Max upload size, used by nginx client_max_body_size.
 taiga_max_upload_size: 100M
+
+# Object storage for uploaded media + attachments (S3-compatible; Backblaze B2
+# in prod). Empty bucket => attachments stay on local disk (taiga_media_root),
+# exactly as upstream ships. In prod point these at the shared LinkedTrust B2
+# bucket — the same bucket/keys govkit uses for claim media — so files survive
+# a VM rebuild instead of living on a disk nobody backs up. Set the secrets
+# (taiga_storage_key/secret) in the PRIVATE inventory, never here.
+taiga_storage_bucket: ""
+taiga_storage_key: ""
+taiga_storage_secret: ""
+taiga_storage_endpoint: ""          # empty => https://s3.<region>.backblazeb2.com
+taiga_storage_region: "us-east-005"
+taiga_storage_public_url: ""        # empty => derived from bucket + region
+taiga_storage_prefix: "taiga"

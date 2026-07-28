@@ -45,6 +45,30 @@ MEDIA_ROOT = "{{ taiga_media_root }}"
 MEDIA_URL = f"{TAIGA_URL}/media/"
 STATIC_ROOT = "{{ taiga_static_root }}"
 STATIC_URL = f"{TAIGA_URL}/static/"
+{% if taiga_storage_bucket %}
+
+#########################################
+# OBJECT STORAGE — Backblaze B2 (S3-compatible)
+# Uploaded media + attachments go to the shared LinkedTrust B2 bucket (same
+# bucket/keys as claim media; cf. govkit apps/commons/storage.py) under the
+# {{ taiga_storage_prefix }}/ prefix, so files survive a VM rebuild instead of
+# living on local disk. Overrides the FileSystemStorage default. Public-by-URL
+# with unguessable hashed keys (same posture as the nginx /media/ fan-out).
+# Empty taiga_storage_bucket => this block is omitted and files stay on disk.
+#########################################
+DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+THUMBNAIL_DEFAULT_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+AWS_ACCESS_KEY_ID = "{{ taiga_storage_key }}"
+AWS_SECRET_ACCESS_KEY = "{{ taiga_storage_secret }}"
+AWS_STORAGE_BUCKET_NAME = "{{ taiga_storage_bucket }}"
+AWS_S3_ENDPOINT_URL = "{{ taiga_storage_endpoint or 'https://s3.' ~ taiga_storage_region ~ '.backblazeb2.com' }}"
+AWS_S3_REGION_NAME = "{{ taiga_storage_region }}"
+AWS_LOCATION = "{{ taiga_storage_prefix }}"
+AWS_S3_CUSTOM_DOMAIN = "{{ (taiga_storage_public_url | regex_replace('^https?://', '')) if taiga_storage_public_url else (taiga_storage_bucket ~ '.s3.' ~ taiga_storage_region ~ '.backblazeb2.com') }}"
+AWS_QUERYSTRING_AUTH = False
+AWS_DEFAULT_ACL = None
+AWS_S3_FILE_OVERWRITE = False
+{% endif %}
 
 #########################################
 # EMAIL

@@ -50,6 +50,22 @@
     - Restart taiga-back
     - Restart taiga-async
 
+# Object storage backend. Only needed when a bucket is configured — an install
+# with no B2 keeps upstream's on-disk FileSystemStorage and needs no boto3
+# (mirrors the config.py.j2 gate on the same var).
+- name: Install object-storage backend (django-storages + boto3)
+  ansible.builtin.pip:
+    name:
+      - django-storages>=1.14,<1.15
+      - boto3
+    virtualenv: "{{ taiga_venv }}"
+  become: true
+  become_user: "{{ taiga_user }}"
+  when: taiga_storage_bucket | length > 0
+  notify:
+    - Restart taiga-back
+    - Restart taiga-async
+
 # pip reinstalls VCS requirements on every run, so guard with a presence
 # check to stay idempotent. NOTE: bumping taiga_linkedtrust_plugin_version
 # only takes effect if the plugin's setup.py version also changes — for a

@@ -65,6 +65,18 @@ taiga_admin_email: admin@example.org
 # scrum-template slugs are ux, design, front, back, product-owner, stakeholder.
 # The sync fails per-project, listing the available slugs, if it doesn't match:
 taiga_member_role_slug: back
+# Object storage for Taiga uploaded media + attachments (S3-compatible; B2 in
+# prod). Leave taiga_storage_bucket empty to keep attachments on local disk
+# (upstream default). Point these at the SHARED LinkedTrust B2 bucket — the
+# same bucket/keys govkit uses for claim media (govkit_storage_*) — so files
+# survive a VM rebuild. Keys go in Vault, never in this example file.
+taiga_storage_bucket: ""                 # e.g. "trustclaims-images"
+taiga_storage_key: "VAULT-ME"
+taiga_storage_secret: "VAULT-ME"
+taiga_storage_region: "us-east-005"
+taiga_storage_endpoint: ""               # empty => https://s3.<region>.backblazeb2.com
+taiga_storage_public_url: ""             # empty => derived from bucket + region
+taiga_storage_prefix: "taiga"
 # RabbitMQ (local, the only stateful non-Postgres dep; used by taiga events/async)
 rabbitmq_taiga_user: taiga
 rabbitmq_taiga_password: "VAULT-ME"
