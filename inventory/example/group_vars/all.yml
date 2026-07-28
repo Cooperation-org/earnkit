@@ -210,6 +210,12 @@ govkit_login_next_allowed_hosts: "{{ workersvc_domain }}"
 # govkit itself — keep it literal (single braces are not jinja):
 govkit_cohort_front_door: "https://{{ workersvc_domain }}/dash/{org_slug}/connect/"
 
+# The org that IS the accelerator (same one the doorway resolves invites for).
+# Without it the accelerator's Activity rail shows only its own hand-raises,
+# the mentors page is superusers-only, and the accelerator lists itself as a
+# venture:
+govkit_accelerator_org_slug: "{{ workersvc_govkit_org_slug }}"
+
 # ---------------------------------------------------------------------------
 # workersvc (Workers.vc public face) — from source
 # ---------------------------------------------------------------------------
