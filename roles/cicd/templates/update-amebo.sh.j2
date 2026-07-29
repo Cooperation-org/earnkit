@@ -10,3 +10,24 @@ sudo -u amebo /opt/amebo/venv/bin/pip install -q -r backend/requirements.txt
 /opt/earnkit/bin/apply-amebo-migrations 2>/dev/null || true
 systemctl restart amebo-backend
 systemctl is-active amebo-backend
+
+# The frontend is a Next.js production build: `next start` serves whatever was
+# compiled, so pulling new source changes nothing until it is rebuilt. Without
+# this the backend would gain new routes while the dashboard kept serving the
+# old pages — new endpoints answering 401 while their pages 404, which is
+# exactly what happened.
+#
+# Only runs where a frontend service actually exists (this VM class may be
+# backend-only), and a build failure must not fail the backend deploy that has
+# already succeeded above.
+if systemctl list-unit-files amebo-frontend.service >/dev/null 2>&1 \
+   && [ -d /opt/amebo/frontend ]; then
+  echo "==> rebuilding amebo frontend"
+  if sudo -u amebo bash -lc 'cd /opt/amebo/frontend && npm ci && npm run build'; then
+    systemctl restart amebo-frontend
+    systemctl is-active amebo-frontend
+  else
+    echo "!! frontend build FAILED — backend is updated, dashboard is stale" >&2
+    exit 1
+  fi
+fi
