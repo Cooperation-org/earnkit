@@ -10,3 +10,15 @@ sudo -u amebo /opt/amebo/venv/bin/pip install -q -r backend/requirements.txt
 /opt/earnkit/bin/apply-amebo-migrations 2>/dev/null || true
 systemctl restart amebo-backend
 systemctl is-active amebo-backend
+
+# Frontend: rebuild the Next.js standalone bundle from the same checkout and
+# restart it. Without this the frontend drifts from main — it used to be built
+# by hand, so deploys silently shipped a stale UI. npm ci pins deps to the
+# lockfile; the two copies stage what `next build` leaves out of standalone.
+cd /opt/amebo/frontend
+sudo -u amebo npm ci
+sudo -u amebo npm run build
+sudo -u amebo cp -a .next/static .next/standalone/.next/
+sudo -u amebo bash -c '[ -d public ] && cp -a public .next/standalone/ || true'
+systemctl restart amebo-frontend
+systemctl is-active amebo-frontend

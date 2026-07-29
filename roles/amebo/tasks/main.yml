@@ -136,3 +136,47 @@
     enabled: true
     state: started
     daemon_reload: "{{ amebo_unit.changed }}"
+
+# ---- frontend (Next.js standalone) --------------------------------------------
+# The cohort dash: /chat, /login, /dashboard/*. Built to a self-contained
+# standalone bundle run by amebo-frontend.service; nginx proxies to it on
+# {{ amebo_frontend_port }}. Rebuilt on every deploy by cicd/update-amebo, so a
+# stale build is never what ships (this was the gap: the frontend used to be
+# hand-built and drift from main). Node comes from the base role (nodejs).
+- name: Frontend npm install (clean, from package-lock)
+  ansible.builtin.command:
+    cmd: npm ci
+    chdir: "{{ amebo_frontend_dir }}"
+  become_user: "{{ amebo_user }}"
+  register: amebo_npm_ci
+  changed_when: "'added' in amebo_npm_ci.stdout or 'changed' in amebo_npm_ci.stdout"
+  notify: restart amebo-frontend
+
+- name: Build the frontend and stage static/public into the standalone bundle
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      npm run build
+      # Next standalone omits these; they must sit beside server.js.
+      cp -a .next/static .next/standalone/.next/
+      [ -d public ] && cp -a public .next/standalone/ || true
+    chdir: "{{ amebo_frontend_dir }}"
+    executable: /bin/bash
+  become_user: "{{ amebo_user }}"
+  changed_when: true
+  notify: restart amebo-frontend
+
+- name: amebo-frontend unit
+  ansible.builtin.template:
+    src: amebo-frontend.service.j2
+    dest: /etc/systemd/system/amebo-frontend.service
+    mode: "0644"
+  register: amebo_frontend_unit
+  notify: restart amebo-frontend
+
+- name: amebo-frontend enabled + started
+  ansible.builtin.systemd:
+    name: amebo-frontend
+    enabled: true
+    state: started
+    daemon_reload: "{{ amebo_frontend_unit.changed }}"

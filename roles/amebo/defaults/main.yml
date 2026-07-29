@@ -19,6 +19,11 @@ amebo_home: /opt/amebo                       # the git checkout itself
 amebo_backend_dir: "{{ amebo_home }}/backend"
 amebo_venv_dir: "{{ amebo_home }}/venv"      # cicd update script pins this path
 amebo_env_file: "{{ amebo_backend_dir }}/.env"  # read by systemd AND python-dotenv (cwd)
+# Next.js frontend (the cohort dash: /chat, /login, /dashboard/*). Built to a
+# standalone bundle and run by amebo-frontend.service; nginx proxies to it.
+# cicd/update-amebo rebuilds it on deploy.
+amebo_frontend_dir: "{{ amebo_home }}/frontend"
+amebo_frontend_port: 3000
 
 # --- network -------------------------------------------------------------------
 # localhost only: the VM's nginx proxies from port 80.
