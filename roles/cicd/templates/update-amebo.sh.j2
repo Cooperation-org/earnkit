@@ -11,14 +11,26 @@ sudo -u amebo /opt/amebo/venv/bin/pip install -q -r backend/requirements.txt
 systemctl restart amebo-backend
 systemctl is-active amebo-backend
 
-# Frontend: rebuild the Next.js standalone bundle from the same checkout and
-# restart it. Without this the frontend drifts from main — it used to be built
-# by hand, so deploys silently shipped a stale UI. npm ci pins deps to the
-# lockfile; the two copies stage what `next build` leaves out of standalone.
-cd /opt/amebo/frontend
-sudo -u amebo npm ci
-sudo -u amebo npm run build
-sudo -u amebo cp -a .next/static .next/standalone/.next/
-sudo -u amebo bash -c '[ -d public ] && cp -a public .next/standalone/ || true'
-systemctl restart amebo-frontend
-systemctl is-active amebo-frontend
+# The frontend is a Next.js STANDALONE build: the service runs
+# .next/standalone/server.js, so pulling new source changes nothing until it is
+# rebuilt. Without this the backend gains new routes while the dashboard keeps
+# serving old pages — new endpoints answering 401 while their pages 404.
+#
+# Only runs where a frontend service actually exists (this VM class may be
+# backend-only), and a build failure must not fail the backend deploy that has
+# already succeeded above. next build leaves static/ and public/ OUT of the
+# standalone bundle, so they are staged beside server.js in the same guarded
+# step — a copy failure trips the same else and stops the deploy.
+if systemctl list-unit-files amebo-frontend.service >/dev/null 2>&1 \
+   && [ -d /opt/amebo/frontend ]; then
+  echo "==> rebuilding amebo frontend"
+  if sudo -u amebo bash -lc 'cd /opt/amebo/frontend && npm ci && npm run build \
+       && cp -a .next/static .next/standalone/.next/ \
+       && { [ -d public ] && cp -a public .next/standalone/ || true; }'; then
+    systemctl restart amebo-frontend
+    systemctl is-active amebo-frontend
+  else
+    echo "!! frontend build FAILED — backend is updated, dashboard is stale" >&2
+    exit 1
+  fi
+fi
