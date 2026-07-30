@@ -143,6 +143,20 @@
 # {{ amebo_frontend_port }}. Rebuilt on every deploy by cicd/update-amebo, so a
 # stale build is never what ships (this was the gap: the frontend used to be
 # hand-built and drift from main). Node comes from the base role (nodejs).
+
+# MUST come before the build: next build bakes NEXT_PUBLIC_* into the bundle,
+# and without this the client uses api.ts's localhost:8000 default (the user's
+# own machine in a browser) and every API call — including auth — fails, which
+# shows up as an SSO login loop.
+- name: Frontend build-time env (NEXT_PUBLIC_* baked into the bundle)
+  ansible.builtin.template:
+    src: frontend.env.production.j2
+    dest: "{{ amebo_frontend_dir }}/.env.production"
+    owner: "{{ amebo_user }}"
+    group: "{{ amebo_user }}"
+    mode: "0644"
+  notify: restart amebo-frontend
+
 - name: Frontend npm install (clean, from package-lock)
   ansible.builtin.command:
     cmd: npm ci
