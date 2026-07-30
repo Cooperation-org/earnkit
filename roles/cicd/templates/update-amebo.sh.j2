@@ -2,6 +2,14 @@
 # earnkit CI/CD: update amebo from its repo and restart. Invoked by the
 # amebo repo's GitHub Actions workflow via: sudo /opt/earnkit/bin/update-amebo
 set -euo pipefail
+
+# Serialize deploys. A push-triggered GitHub Actions run and a second run
+# (another push, or a manual deploy) would both `next build` in the same tree
+# and collide on .next/lock — one fails and leaves the dashboard stale. Hold an
+# exclusive lock so a second invocation waits its turn instead of racing.
+exec 9>/run/lock/earnkit-update-amebo.lock
+flock -w 600 9 || { echo "update-amebo: another deploy holds the lock (waited 10m); giving up" >&2; exit 1; }
+
 cd /opt/amebo
 sudo -u amebo git fetch origin
 sudo -u amebo git reset --hard "origin/{{ amebo_branch }}"
