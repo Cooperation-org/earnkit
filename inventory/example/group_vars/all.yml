@@ -150,7 +150,7 @@ amebo_s2s_token: "VAULT-ME"
 # Origins allowed credentialed CORS on amebo's API — the cohort dash on the
 # apex plus amebo's own host (PLAN-cohort-dash.md). Empty = amebo's built-in
 # default origin list:
-amebo_cors_origins: "https://{{ workersvc_domain }},https://{{ amebo_domain }}"
+amebo_cors_origins: "https://{{ workersvc_domain }},https://{{ govkit_domain }},https://{{ amebo_domain }}"
 
 # Origins amebo's OIDC login may return a ?next= chain hop to — lets the dash
 # sign-in cascade pass through amebo and land back on the apex (amebo
