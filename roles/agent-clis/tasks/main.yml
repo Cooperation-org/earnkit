@@ -12,8 +12,13 @@
   ansible.builtin.file:
     path: "{{ agent_clis_dir }}"
     state: directory
-    owner: root
-    group: root
+    # Owned by the amebo user, not root: the git clone below must run as a
+    # NON-root user, because the shared deploy key (/etc/earnkit/github-deploy-key,
+    # 0644 root:root) is REJECTED by ssh when root itself reads it ("unprotected
+    # private key"), but accepted when a non-root user reads it. amebo is the sole
+    # consumer of these CLIs, so it owns the tree and clones into it.
+    owner: "{{ amebo_user | default('amebo') }}"
+    group: "{{ amebo_user | default('amebo') }}"
     mode: "0755"
 
 # ---- mcp-taiga ------------------------------------------------------------
@@ -23,6 +28,7 @@
     dest: "{{ agent_clis_dir }}/mcp-taiga"
     version: "{{ mcp_taiga_branch }}"
     force: true
+  become_user: "{{ amebo_user | default('amebo') }}"   # shared key works only for non-root
   register: mcp_taiga_clone
 
 # The wrapper resolves its own directory through symlinks and expects the venv
@@ -32,6 +38,7 @@
     requirements: "{{ agent_clis_dir }}/mcp-taiga/requirements.txt"
     virtualenv: "{{ agent_clis_dir }}/mcp-taiga/.venv"
     virtualenv_command: python3 -m venv
+  become_user: "{{ amebo_user | default('amebo') }}"
 
 - name: mcp-taiga is executable
   ansible.builtin.file:
