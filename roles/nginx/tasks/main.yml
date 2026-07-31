@@ -19,6 +19,13 @@
     line: '        include /etc/nginx/earnkit/*.conf;'
   notify: reload nginx
 
+- name: Compression (Caddy's Via header defeats nginx's default gzip_proxied)
+  ansible.builtin.template:
+    src: 00-gzip.conf.j2
+    dest: /etc/nginx/earnkit/00-gzip.conf
+    mode: "0644"
+  notify: reload nginx
+
 - name: Drop the distro default site (port 80 collision)
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
