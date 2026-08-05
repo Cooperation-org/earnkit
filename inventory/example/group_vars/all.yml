@@ -158,6 +158,12 @@ amebo_cors_origins: "https://{{ workersvc_domain }},https://{{ govkit_domain }},
 # PLAN-cohort-dash.md, SSO-once addition). Empty allows FRONTEND_URL only:
 amebo_oidc_next_allowed_origins: "https://{{ workersvc_domain }}"
 
+# The instance that answers somebody who belongs to no org — a person screened
+# into the applicant pool. add-team names each team's instance after its slug,
+# so the accelerator's own instance is the accelerator's org slug. Empty = a
+# session with no org gets no amebo:
+amebo_default_instance_slug: "{{ workersvc_govkit_org_slug }}"
+
 # The two accounts amebo acts THROUGH. Its CRM and board tools are not special
 # clients: they log in like a person does, so without these they hold nothing
 # to authenticate with and answer "CRM not configured" / fail on every board

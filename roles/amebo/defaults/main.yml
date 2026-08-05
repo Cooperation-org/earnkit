@@ -39,6 +39,14 @@ amebo_use_event_subscriptions: false
 # the env, so the app's built-in default origin list applies.
 amebo_cors_origins: ""
 
+# --- who answers somebody with no org --------------------------------------------
+# Slug of the amebo instance that serves people who belong to no org yet — on a
+# cohort VM, the accelerator's own instance (the same slug add-team gave it).
+# A person screened into the applicant pool has no membership anywhere, so
+# there is no org to resolve an instance from; this names the one to use. Empty
+# = line omitted, and a session with no org gets 404 as before.
+amebo_default_instance_slug: ""
+
 # --- systemd resource ceiling ---------------------------------------------------
 # sentence-transformers keeps an embedding model resident (torch) — leave headroom.
 amebo_memory_max: 3G
