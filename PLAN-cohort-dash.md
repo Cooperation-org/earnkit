@@ -178,3 +178,19 @@ A playbook run applies all env changes idempotently; credentialed
 preflight + GET from origin `https://workers.vc` succeeds against
 `dash.workers.vc/api/v1/...` and `amebo.workers.vc/api/...`; one command
 upgrades the outreach addon across all team CRM DBs.
+
+## The dash list on a brand-new team (2026-08-05)
+
+The work list amebo assembles was designed against LinkedTrust's board — 869
+open stories, 367 of them undated and unowned — so it deliberately keeps unowned
+undated work off a person's list. A cohort team's board is the opposite problem:
+zero rows, or six. The same rule gives a new team an empty page.
+
+The fix is a fill order rather than an ownership test: yours dated, yours
+undated, unowned dated, then unowned undated **only while there is room under
+the twenty-row cap**. A full board never reaches the last band; a new one does.
+No per-team configuration.
+
+Written up in `/opt/shared/projects/plans/amebo/8-5-2026-handoff-two-opposite-problems.md`.
+Relevant when inviting a cohort team onto `/dash/<org-slug>/` before their board
+has anything on it.
