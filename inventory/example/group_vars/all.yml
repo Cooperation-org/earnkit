@@ -203,9 +203,10 @@ govkit_fernet_key: "VAULT-ME"        # python3 -c "from cryptography.fernet impo
 # endpoints (every call 401s):
 govkit_s2s_token: "VAULT-ME"
 # Origins allowed credentialed CORS on GovKit's API — the cohort dash lives on
-# the apex and mounts GovKit's embed components (PLAN-cohort-dash.md). Empty
-# disables cross-origin API access:
-govkit_cors_origins: "https://{{ workersvc_domain }}"
+# the apex and mounts GovKit's embed components (PLAN-cohort-dash.md), and the
+# cross-app bar asks GovKit who the person is from every app that mounts it.
+# Empty disables cross-origin API access:
+govkit_cors_origins: "https://{{ workersvc_domain }},https://{{ amebo_domain }},https://{{ marten_domain }}"
 
 # Hostnames GovKit may bounce an absolute https ?next= to after LinkedTrust
 # login — lets the dash sign-in cascade return to the apex (govkit
