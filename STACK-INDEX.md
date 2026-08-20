@@ -5,6 +5,12 @@ lost. Verified against code and the live deployment this date. Companion to
 `PLAN-cohort-dash.md` (same-named file in each repo). Corrections welcome —
 this file lives in earnkit because earnkit is the composition.
 
+> **Manual state on the live box:** amebo's team CRM/Taiga connections and the
+> `odoo-cli` install were provisioned **by hand** on cohort-services on
+> 2026-08-20 (inventory-local predates the service-account feature). What was
+> done, where the creds live, and the known gaps are recorded in
+> [`docs/COHORT-MANUAL-STATE-2026-08.md`](docs/COHORT-MANUAL-STATE-2026-08.md).
+
 ## Hosts (live cohort VM, via Caddy-on-Proxmox → VM nginx)
 
 | Host | App | Repo | Upstream |
