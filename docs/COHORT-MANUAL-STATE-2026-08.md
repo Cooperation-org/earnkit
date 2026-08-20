@@ -36,9 +36,9 @@ contacts, not another team's.
 
 Taiga user `amebo` (id 17) added as **member (role `back`) of all 6 team
 boards** (was 0 memberships). Password unchanged (reused the existing
-`TAIGA_PASSWORD` in amebo's env). Still `is_superuser=true` — **safe to drop**
-now (every active board is covered by membership; the account's only consumer is
-amebo's own env) but **left on** pending an explicit OK.
+`TAIGA_PASSWORD` in amebo's env). **Superuser dropped 2026-08-20**
+(`is_superuser=false`, still active) — verified amebo still lists the vc board
+via membership, so board tools keep working at least privilege.
 
 ## 3. odoo-cli — INSTALLED manually (per `roles/agent-clis`)
 
@@ -48,21 +48,37 @@ only) → **`/opt/agent-clis/cobox`**, symlink **`/usr/local/bin/odoo-cli`** →
 `/etc/earnkit/github-deploy-key`. (`mcp-taiga` was already installed at
 `/opt/agent-clis/mcp-taiga`.)
 
-Works per-team: `status`, `user-list`, `contact-list` (with `ODOO_DB=crm-<slug>`).
+Works per-team: `status`, `user-list`, `contact-list`, `contact-search`
+(with `ODOO_DB=crm-<slug>`).
 
-**KNOWN BUG:** `odoo-cli contact-search` filters on custom field
-`res.partner.x_abra_catcode`, which the team CRM dbs do not have (it exists in
-`linkedtrust_crm`, which odoo-cli was built for) → XML-RPC fault. This is the
-verb amebo's contact-search tool calls, so that tool fails on team dbs until
-either `cobox/scripts/odoo-cli.sh` skips the catcode filter when the field is
-absent, or the field is added to the team dbs. `contact-list` and the in-process
-CRM read tools are unaffected.
+**FIXED 2026-08-20 (cobox `bcb49ea`):** `contact-search`/`contact-export`
+hardcoded the custom field `res.partner.x_abra_catcode`, which the team CRM dbs
+do not have (only `linkedtrust_crm` does) → XML-RPC fault. Now the field is
+detected with `fields_get` and included only when present; linkedtrust keeps
+catcode search, team dbs work. Verified: crm-vc "Greg"→3, crm-integralmass
+"Baah"→its own contact. Change is in the cobox repo (pushed), and the box
+checkout at `/opt/agent-clis/cobox` was reset to origin/main.
 
-## 4. Still down
+## 4. abra — NOT done, needs a decision (did not guess)
 
-- **abra** (knowledge tools: `search_knowledge_base`, project-doc tools) — not
-  installed; needs `ABRA_DATABASE_URL` + the projects store. `agent-clis` does
-  not cover abra.
+amebo's knowledge tools have two backends: the in-process `abra_search`
+(`binding_repo.py`, needs `ABRA_DATABASE_URL`) and the `abra` CLI passthrough
+(`registry.py` shells the `abra` binary). Neither is wired here, and unlike
+odoo-cli this is not defined in earnkit:
+
+- `agent-clis` installs only `mcp-taiga` + `odoo-cli`, not abra.
+- abra's source (`Cooperation-org/abra`) is not on this box (`/opt/shared/repos/abra`
+  is dev-VM only); the `abra` **binary** install method is unspecified
+  (`abra-lib` on PyPI is a python library, not the CLI).
+- The backing store is ambiguous: the `abra` DB on VM 100 is described in the
+  app-registry as "catcode_registry only", so pointing `ABRA_DATABASE_URL`
+  there may not be the right knowledge store for cohort teams.
+- amebo's own team defaults deliberately EXCLUDE abra tools "until
+  ABRA_DATABASE_URL and the shared projects repo present on this VM."
+
+Needs from an operator: the abra CLI repo/install method, and which DB
+`ABRA_DATABASE_URL` should point at for cohort teams. Until then abra tools
+stay down.
 
 ## 5. To make this durable in earnkit (not yet done — needs VM 200 private inv)
 
