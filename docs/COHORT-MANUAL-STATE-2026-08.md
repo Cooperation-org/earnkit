@@ -59,26 +59,33 @@ catcode search, team dbs work. Verified: crm-vc "Greg"→3, crm-integralmass
 "Baah"→its own contact. Change is in the cobox repo (pushed), and the box
 checkout at `/opt/agent-clis/cobox` was reset to origin/main.
 
-## 4. abra — NOT done, needs a decision (did not guess)
+## 4. abra / knowledge — resolved 2026-08-20 (in-process path kept, external dropped)
 
-amebo's knowledge tools have two backends: the in-process `abra_search`
-(`binding_repo.py`, needs `ABRA_DATABASE_URL`) and the `abra` CLI passthrough
-(`registry.py` shells the `abra` binary). Neither is wired here, and unlike
-odoo-cli this is not defined in earnkit:
+amebo has TWO knowledge backends:
 
-- `agent-clis` installs only `mcp-taiga` + `odoo-cli`, not abra.
-- abra's source (`Cooperation-org/abra`) is not on this box (`/opt/shared/repos/abra`
-  is dev-VM only); the `abra` **binary** install method is unspecified
-  (`abra-lib` on PyPI is a python library, not the CLI).
-- The backing store is ambiguous: the `abra` DB on VM 100 is described in the
-  app-registry as "catcode_registry only", so pointing `ABRA_DATABASE_URL`
-  there may not be the right knowledge store for cohort teams.
-- amebo's own team defaults deliberately EXCLUDE abra tools "until
-  ABRA_DATABASE_URL and the shared projects repo present on this VM."
+- **In-process, per-org (KEPT):** `search_knowledge_base` + `lookup_contact`
+  run via `BindingService(org_id)` against amebo's OWN local `abra_*` tables in
+  `amebo_vc` — no external binary, no external DB, org-isolated. Verified live
+  for org 1 and 48: they execute cleanly and return "No results" only because
+  no knowledge has been ingested into those local tables yet (empty, not
+  broken). This is the right multi-tenant fit; ingestion into the local
+  `abra_*` tables is the separate step that makes them return content.
+- **External `abra` binary (`abra`, `abra_search`) — NOT wired, and removed
+  from vc's allowed_tools (43→41).** The `abra` CLI
+  (`Cooperation-org/abra` → `impl/abra` → `pgvector/query.py`) reads the abra
+  DB on VM 100, whose tables are owned by the **`cobox`** role. There is **no
+  `cobox` credential on this box** and the local admin (`odoo_vc`) is not a
+  superuser, so it can neither read those tables nor grant access — I will not
+  guess the password. It would also read the SHARED linkedtrust knowledge, so
+  pointing every team at it breaks the per-team isolation the in-process path
+  gives. Decision: drop the external abra tools from the cohort; rely on the
+  in-process KB.
 
-Needs from an operator: the abra CLI repo/install method, and which DB
-`ABRA_DATABASE_URL` should point at for cohort teams. Until then abra tools
-stay down.
+If a team-wide (non-isolated) abra is ever wanted here, it needs the `cobox` DB
+password (lives in the dev-VM `abra/impl/.env`) set as `ABRA_DATABASE_URL`, the
+abra CLI installed in its own venv (its `impl/abra` wrapper hardcodes the
+dev-VM path `/opt/shared/repos/abra/impl` and would need a path fix), and
+`sentence-transformers` for embedding search. Deferred on purpose.
 
 ## 5. To make this durable in earnkit (not yet done — needs VM 200 private inv)
 
