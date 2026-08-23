@@ -22,12 +22,27 @@
     - vars/amebo-team-defaults.yml
 
   pre_tasks:
+    # 30 characters, not 31: the host's crm-route-listener caps the slug there
+    # (^[a-z0-9]([a-z0-9-]{0,28}[a-z0-9])?$), so a 31-character slug provisions
+    # every other resource and then fails on the one step that gives the team a
+    # working CRM address. Whoever is strictest sets the limit for all of us.
     - name: Validate team vars
       ansible.builtin.assert:
         that:
-          - team_slug is match('^[a-z0-9][a-z0-9-]{1,30}$')
+          - team_slug is match('^[a-z0-9][a-z0-9-]{1,29}$')
           - team_name | length > 1
-        fail_msg: "Pass -e team_slug=<slug> -e team_name='<Display Name>'"
+        fail_msg: "Pass -e team_slug=<slug> -e team_name='<Display Name>' (slug: 2-30 chars)"
+
+    # A team with no CRM address is not a provisioned team. Refuse the run here
+    # rather than skip the Caddy step at the end and leave a stack that looks
+    # finished everywhere it is checked (trusthire, 2026-08-06 to 2026-08-23).
+    - name: "Caddy API token is present"
+      ansible.builtin.assert:
+        that:
+          - caddy_api_token | default('') | length > 0
+        fail_msg: >-
+          caddy_api_token is unset in the inventory, so crm-{{ team_slug }}.{{ cohort_domain }}
+          could not be routed and the team would have no CRM address. Set it and re-run.
 
   tasks:
     # ---- Odoo: one database per team --------------------------------------
@@ -209,10 +224,6 @@
     - name: "Taiga: amebo service account"
       ansible.builtin.import_tasks: tasks/taiga-service-user.yml
 
-    # ---- amebo: register the org and give the instance an identity -------
-    - name: "amebo: org + instance"
-      ansible.builtin.import_tasks: tasks/amebo-instance.yml
-
     # ---- GovKit: one org per team ------------------------------------------
     - name: "GovKit: org {{ team_slug }}"
       ansible.builtin.shell: |
@@ -275,6 +286,18 @@
         body_format: json
         body:
           slug: "{{ team_slug }}"
-        status_code: [200, 201]
-      when: caddy_api_token | default('') | length > 0
+        # 409 is the listener saying the route is already there — the state we
+        # want, and the state every re-run finds. Refusing it made a second run
+        # fail on its last task.
+        status_code: [200, 201, 409]
       no_log: true   # Authorization header carries the Caddy API token
+
+    # ---- amebo: register the org and give the instance an identity ---------
+    # LAST, and deliberately so. amebo treats the `instances` row as the marker
+    # for "this team's stack is up" (services/org_provisioning.team_stack_provisioned)
+    # and will not re-fire add-team for a slug that has one. Written mid-play, it
+    # marked half-built stacks as finished: trusthire got its row and then failed
+    # the Caddy step, so nothing ever retried it and it sat without a CRM address
+    # for 17 days. Written here, the row means every step above it succeeded.
+    - name: "amebo: org + instance"
+      ansible.builtin.import_tasks: tasks/amebo-instance.yml
