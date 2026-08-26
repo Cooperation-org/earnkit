@@ -1,5 +1,10 @@
 # earnkit
 
+**The current workers.vc VM (517, 10.0.0.17) is NOW ON MANUAL MODE.** (2026-08-26)
+The playbooks below were used for initial setup only. All changes to the VM are made
+manually on the VM; this repo is updated afterward as the record. Do not run ansible
+against it.
+
 **One Ansible playbook that stands up the earned-governance stack on a fresh VM.**
 
 earnkit composes tools that each work on their own — it contains no application
