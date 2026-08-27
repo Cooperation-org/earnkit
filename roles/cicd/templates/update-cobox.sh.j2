@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# earnkit CI/CD: update the ops-repo checkout that provides odoo-cli. Invoked
+# by the cobox repo's GitHub Actions workflow via:
+#   sudo /opt/earnkit/bin/update-cobox
+#
+# The checkout is SPARSE on purpose (scripts/ only) — that repo also documents
+# the hypervisor, every other VM and how to reach the databases, and none of
+# that belongs on a cohort VM. `git reset --hard` respects the sparse-checkout
+# config, so the narrowing survives every deploy; it is re-asserted below
+# anyway, because a checkout silently widening is the failure that matters.
+set -euo pipefail
+
+COBOX_DIR={{ agent_clis_dir }}/cobox
+CLI_USER={{ amebo_user | default('amebo') }}
+
+cd "$COBOX_DIR"
+sudo -u "$CLI_USER" git sparse-checkout set --no-cone '{{ cobox_sparse_paths }}'
+sudo -u "$CLI_USER" git fetch origin
+sudo -u "$CLI_USER" git reset --hard "origin/{{ cobox_branch }}"
+
+# odoo-cli is a symlink to a file inside that sparse path. If the path ever
+# stops being checked out, the symlink dangles and every CRM tool in amebo
+# fails with "no such file" — catch it here, not in a team's Slack thread.
+test -x "$COBOX_DIR/scripts/odoo-cli.sh"
