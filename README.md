@@ -20,6 +20,11 @@ them together:
 | **amebo** | `Cooperation-org/amebo` | the team's knowledge-cooperation agent |
 | **workersvc** | `Cooperation-org/workers.vc` | Workers.vc public face: VC landing, accelerator pages, invite doorway |
 
+How those tools compose into one dashboard page — the component contracts, the
+catalog, and how to run the set on a laptop — is documented once, in
+**`govkit/docs/COMPOSITION.md`**. earnkit provisions the hosts; that document
+explains what runs on them.
+
 Design rules (settled — see `docs/DECISIONS.md`):
 
 - **No Docker, no containers.** Everything runs native under systemd.
