@@ -74,6 +74,12 @@ Known gaps: register tab calls a method that doesn't exist (throws), dead client
 
 - `crm_card_scanner`: Contacts → Scan Card (phone camera → MiniMax vision or local Tesseract → `res.partner` + card image; company find-or-create). `/scan-card` redirect route. No lead creation.
 - `crm_outreach_runner`: CRM → Outreach Runner — prioritized `crm.lead` queue: pin/drag beats stored rubric `outreach_score` (0-100 + reason), "Contacted" stamps `last_outreach_date`; partner linkedin/discord fields. **No HTTP/JSON API yet** (planned: `/outreach/api/queue` + `<crm-reachout>`, see its PLAN).
+- `crm_campaign_cards`: CRM → Campaigns — the campaign kanban says what each campaign
+  is about (`about`), who it is for (`who_for`), and links its doc, derived from the
+  `x_project_ref` a campaign already carries. Cards, not stage columns, ordered by
+  contact count. Serves `/campaigns` as the short link. The `about` text is synced
+  from each campaign’s `MAIN.md` by `campaign-sync-about`, which reads the projects
+  repo and so only runs where that repo is checked out.
 - `crm_world`: the world model — `world.space` (a place with membership you enter and are heard in: slack, discord, forum, list, repo, venue, city) and `world.event` (happens at a time, not ours to move: conference, call, application window, funding deadline), with `world.event.date` holding each dated moment so "the next six weeks" is one indexed query. Contacts attach as speakers/attendees/members; `res.partner` gains a World tab. Both carry `uri` (how the world names it) and `last_verified` (a claw must own refreshing it). No lead time on the event by design — when a thing surfaces is the sorting rubric's call, not the fact's.
 - Two more addons exist only on the old live CRM VM, not in git: `crm_relationship_dashboard`, `quick_outreach`.
 - OIDC: `auth.oauth.provider` row per team DB, created by add-team.yml (implicit flow).

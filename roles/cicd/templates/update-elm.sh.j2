@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# earnkit CI/CD: rebuild elm from its repo and restart. Invoked by the elm
+# repo's GitHub Actions workflow via: sudo /opt/earnkit/bin/update-elm
+#
+# elm is a SvelteKit adapter-node app: the service runs `node build`, so a
+# pulled tree changes nothing until it is rebuilt. Pulling without building
+# leaves the box serving the old bundle while git says it is current.
+set -euo pipefail
+
+ELM_DIR={{ elm_dir }}
+ELM_USER={{ elm_user }}
+
+# Serialize deploys — two pushes in quick succession would both npm run build
+# in the same tree and collide, leaving whichever loses with a half-written
+# build/ directory that the service then tries to boot.
+exec 9>/run/lock/earnkit-update-elm.lock
+flock -w 600 9 || { echo "update-elm: another deploy holds the lock (waited 10m); giving up" >&2; exit 1; }
+
+cd "$ELM_DIR"
+sudo -u "$ELM_USER" git fetch origin
+sudo -u "$ELM_USER" git reset --hard "origin/{{ elm_branch }}"
+sudo -u "$ELM_USER" npm ci
+sudo -u "$ELM_USER" npm run build
+systemctl restart {{ elm_service }}
+systemctl is-active {{ elm_service }}

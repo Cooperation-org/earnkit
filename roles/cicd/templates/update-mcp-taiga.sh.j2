@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# earnkit CI/CD: update the mcp-taiga CLI from its repo. Invoked by the
+# mcp-taiga repo's GitHub Actions workflow via:
+#   sudo /opt/earnkit/bin/update-mcp-taiga
+#
+# No service to restart: amebo shells out to `mcp-taiga` per tool call, so a
+# pulled tree is live on the very next call. What DOES need doing is the venv —
+# the wrapper runs the repo's own .venv, so a commit that adds a dependency
+# leaves the CLI importing a module that isn't there until pip runs.
+set -euo pipefail
+
+CLI_DIR={{ agent_clis_dir }}/mcp-taiga
+CLI_USER={{ amebo_user | default('amebo') }}
+
+cd "$CLI_DIR"
+sudo -u "$CLI_USER" git fetch origin
+sudo -u "$CLI_USER" git reset --hard "origin/{{ mcp_taiga_branch }}"
+sudo -u "$CLI_USER" "$CLI_DIR/.venv/bin/pip" install -q -r requirements.txt
+
+# A pull that leaves the CLI unable to run is worse than no pull: amebo's whole
+# board surface is this binary. Prove it still executes as the account amebo's
+# subprocesses run as, and fail the deploy loudly if it does not.
+sudo -u "$CLI_USER" {{ agent_clis_bin_dir }}/mcp-taiga --version

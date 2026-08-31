@@ -118,8 +118,9 @@ odoo_custom_addons:
   - { name: crm_relationship_dashboard, repo: "git@github.com:Cooperation-org/odoo-crm-relationships.git" }
   - { name: quick_outreach,     repo: "git@github.com:Cooperation-org/odoo-crm-quick-outreach.git" }
   - { name: crm_world,          repo: "git@github.com:Cooperation-org/odoo-crm-world.git" }
+  - { name: crm_campaign_cards, repo: "git@github.com:Cooperation-org/crm-campaign-cards.git" }
 # Modules initialized in each new team DB (add-team.yml):
-odoo_team_init_modules: "base,crm,auth_oauth,crm_card_scanner,crm_outreach_runner,crm_relationship_dashboard,quick_outreach,crm_world"
+odoo_team_init_modules: "base,crm,auth_oauth,crm_card_scanner,crm_outreach_runner,crm_relationship_dashboard,quick_outreach,crm_world,crm_campaign_cards"
 # Groups every synced team member gets in their team's CRM database
 # (playbooks/sync-team-members.yml). XML ids; base.group_user makes them
 # INTERNAL users, the sales group lets them see and work all leads:

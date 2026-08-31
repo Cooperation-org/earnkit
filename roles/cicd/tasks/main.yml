@@ -2,6 +2,12 @@
 # CI/CD plumbing: a restricted `deploy` user that each tool repo's GitHub
 # Actions workflow sshes in as. It may ONLY run the per-tool update scripts
 # (via sudo whitelist) — never a shell escalation.
+#
+# EVERY repo the VM runs code from is on this list, apps and CLIs alike. The
+# two CLIs (mcp-taiga, and cobox for odoo-cli) were the ones that were not:
+# they were cloned at provision time and then only moved when a human ran a
+# git pull on the box, so a pushed CLI fix sat undeployed while the apps around
+# it updated themselves. Anything amebo shells out to belongs here too.
 - name: deploy user
   ansible.builtin.user:
     name: "{{ deploy_user }}"
@@ -29,9 +35,12 @@
     mode: "0755"
   loop:
     - amebo
+    - cobox
     - crm-addons
+    - elm
     - govkit
     - marten
+    - mcp-taiga
     - workersvc
 
 - name: sudoers — deploy may run exactly the update scripts
@@ -40,4 +49,4 @@
     mode: "0440"
     validate: visudo -cf %s
     content: |
-      {{ deploy_user }} ALL=(root) NOPASSWD: /opt/earnkit/bin/update-amebo, /opt/earnkit/bin/update-crm-addons, /opt/earnkit/bin/update-govkit, /opt/earnkit/bin/update-marten, /opt/earnkit/bin/update-workersvc
+      {{ deploy_user }} ALL=(root) NOPASSWD: /opt/earnkit/bin/update-amebo, /opt/earnkit/bin/update-cobox, /opt/earnkit/bin/update-crm-addons, /opt/earnkit/bin/update-elm, /opt/earnkit/bin/update-govkit, /opt/earnkit/bin/update-marten, /opt/earnkit/bin/update-mcp-taiga, /opt/earnkit/bin/update-workersvc

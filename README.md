@@ -2,11 +2,16 @@
 
 > ## ⛔ DO NOT REDEPLOY FROM EARNKIT — EVER
 >
+> **The current workers.vc VM (517, 10.0.0.17) is NOW ON MANUAL MODE.** (2026-08-26)
+> The playbooks below were used for initial setup only. All changes to the VM are made
+> manually on the VM; this repo is updated afterward as the record. Do not run ansible
+> against it.
+>
 > **earnkit (`/home/golda/earnkit`, `/opt/earnkit/stack`) is REFERENCE ONLY.**
-> The live VMs are **hand-maintained**. Re-running earnkit (`ansible-playbook site.yml`
-> or any play) **re-templates and OVERWRITES each app's `.env`**, silently dropping
-> hand-added vars (ODOO / TAIGA / goal-scheduler / S2S / Discord). This gutted amebo's
-> live config on **2026-08-24**. Use earnkit only to *read* how something was first wired.
+> Re-running earnkit (`ansible-playbook site.yml` or any play) **re-templates and
+> OVERWRITES each app's `.env`**, silently dropping hand-added vars (ODOO / TAIGA /
+> goal-scheduler / S2S / Discord). This gutted amebo's live config on **2026-08-24**.
+> Use earnkit only to *read* how something was first wired.
 >
 > **Runtime config lives in ONE hand-maintained `.env` per app — edit it directly, never regenerate:**
 > - amebo → `/opt/amebo/backend/.env`  (read by systemd `EnvironmentFile=` **and** the app's `load_dotenv()`)
@@ -14,7 +19,6 @@
 >
 > There is **no** central/secret `.env` and **no** generator. New env var? Add it to that
 > app's `.env`, **by hand**, in that one place.
-
 
 **One Ansible playbook that stands up the earned-governance stack on a fresh VM.**
 
@@ -30,6 +34,11 @@ them together:
 | **Odoo 17** | upstream (source install) | CRM |
 | **amebo** | `Cooperation-org/amebo` | the team's knowledge-cooperation agent |
 | **workersvc** | `Cooperation-org/workers.vc` | Workers.vc public face: VC landing, accelerator pages, invite doorway |
+
+How those tools compose into one dashboard page — the component contracts, the
+catalog, and how to run the set on a laptop — is documented once, in
+**`govkit/docs/COMPOSITION.md`**. earnkit provisions the hosts; that document
+explains what runs on them.
 
 Design rules (settled — see `docs/DECISIONS.md`):
 

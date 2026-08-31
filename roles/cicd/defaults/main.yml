@@ -1,0 +1,13 @@
+---
+# roles/cicd — role defaults.
+#
+# Every other update script templates paths from the role that installs its
+# tool (roles/amebo, roles/marten, roles/agent-clis…). elm has no role here:
+# it is a manual install, documented in the ops repo as
+# cobox/elm-on-workersvc.md, and that doc already names
+# `sudo /opt/earnkit/bin/update-elm` as how a push to main reaches the box.
+# So its paths live here, beside the only earnkit thing that touches it.
+elm_user: elm
+elm_dir: /opt/elm/src
+elm_service: elm
+elm_branch: main
