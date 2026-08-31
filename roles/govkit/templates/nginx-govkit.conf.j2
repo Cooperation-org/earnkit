@@ -2,6 +2,7 @@
 server {
     listen 80;
     server_name {{ govkit_domain }};
+    client_max_body_size 5m;
 
     location / {
         proxy_pass http://127.0.0.1:{{ govkit_http_port }};

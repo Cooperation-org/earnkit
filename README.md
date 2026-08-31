@@ -1,5 +1,21 @@
 # earnkit
 
+> ## ⛔ DO NOT REDEPLOY FROM EARNKIT — EVER
+>
+> **earnkit (`/home/golda/earnkit`, `/opt/earnkit/stack`) is REFERENCE ONLY.**
+> The live VMs are **hand-maintained**. Re-running earnkit (`ansible-playbook site.yml`
+> or any play) **re-templates and OVERWRITES each app's `.env`**, silently dropping
+> hand-added vars (ODOO / TAIGA / goal-scheduler / S2S / Discord). This gutted amebo's
+> live config on **2026-08-24**. Use earnkit only to *read* how something was first wired.
+>
+> **Runtime config lives in ONE hand-maintained `.env` per app — edit it directly, never regenerate:**
+> - amebo → `/opt/amebo/backend/.env`  (read by systemd `EnvironmentFile=` **and** the app's `load_dotenv()`)
+> - govkit → `/opt/govkit/src/.env`  ·  workersvc → `/opt/workersvc/src/.env`
+>
+> There is **no** central/secret `.env` and **no** generator. New env var? Add it to that
+> app's `.env`, **by hand**, in that one place.
+
+
 **One Ansible playbook that stands up the earned-governance stack on a fresh VM.**
 
 earnkit composes tools that each work on their own — it contains no application
