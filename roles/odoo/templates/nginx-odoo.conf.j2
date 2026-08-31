@@ -1,10 +1,23 @@
 # {{ ansible_managed }}
+# crm-*.{{ cohort_domain }} root serves Elm (fast Svelte CRM front); Odoo serves the rest.
+# Auth on these hosts = LinkedTrust SSO via Odoo's own session (elm reuses the session_id
+# cookie; no elm login, no gate). Elm owns only its own routes: EXACTLY /, plus /_app, /c/,
+# /api/, /auth/ (elm's OIDC, != Odoo's /auth_oauth). Everything else — /web, /auth_oauth
+# (Odoo's LinkedTrust callback), /jsonrpc, /xmlrpc, reports, /websocket — stays on Odoo.
 server {
     listen 80;
     server_name ~^crm-(.+)\.{{ cohort_domain | regex_escape }}$;
 
     client_max_body_size 64m;
 
+    # ---- Elm (fast Svelte front) — only its own routes ----
+    location = /    { proxy_pass http://127.0.0.1:{{ elm_port | default(3007) }}; proxy_set_header Host $host; proxy_set_header X-Forwarded-Host $host; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Real-IP $remote_addr; }
+    location /_app  { proxy_pass http://127.0.0.1:{{ elm_port | default(3007) }}; proxy_set_header Host $host; proxy_set_header X-Forwarded-Host $host; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Real-IP $remote_addr; }
+    location /c/    { proxy_pass http://127.0.0.1:{{ elm_port | default(3007) }}; proxy_set_header Host $host; proxy_set_header X-Forwarded-Host $host; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Real-IP $remote_addr; }
+    location /api/  { proxy_pass http://127.0.0.1:{{ elm_port | default(3007) }}; proxy_set_header Host $host; proxy_set_header X-Forwarded-Host $host; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Real-IP $remote_addr; }
+    location /auth/ { proxy_pass http://127.0.0.1:{{ elm_port | default(3007) }}; proxy_set_header Host $host; proxy_set_header X-Forwarded-Host $host; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Real-IP $remote_addr; }
+
+    # ---- Odoo (default): /web, /auth_oauth, /jsonrpc, /xmlrpc, reports, ... ----
     location / {
         proxy_pass http://127.0.0.1:{{ odoo_http_port }};
         proxy_set_header Host $host;
