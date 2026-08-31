@@ -18,6 +18,15 @@ admin_passwd = {{ odoo_admin_password }}
 data_dir = {{ odoo_data_dir }}
 addons_path = {{ odoo_source_dir }}/addons,{{ odoo_custom_addons_dir }}
 
+; ---- server-wide modules (loaded for EVERY database, no per-DB install) ----
+; crm_force_sso: an unauthenticated GET /web/login on a team CRM host 302s
+; straight to the single enabled LinkedTrust provider (no password form). It is
+; controller-only (no models), so loading it server-wide is safe on every
+; crm-<team> DB — current and future — with zero per-team setup.
+; Repo: github.com/Cooperation-org/odoo-crm-force-sso, checked out into
+; {{ odoo_custom_addons_dir }}/crm_force_sso.
+server_wide_modules = base,web,crm_force_sso
+
 ; ---- http ----
 ; localhost only: the VM's nginx proxies from port 80.
 http_interface = 127.0.0.1
