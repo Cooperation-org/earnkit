@@ -20,6 +20,16 @@
 > There is **no** central/secret `.env` and **no** generator. New env var? Add it to that
 > app's `.env`, **by hand**, in that one place.
 
+> ## 📖 Infra / TLS / subdomains / edge routing → read the **cobox** repo FIRST
+>
+> Our edge/TLS/subdomain layout is **not** what you expect and people keep breaking it by
+> assuming a normal certbot/wildcard/reverse-proxy setup. Before changing nginx, a domain,
+> a cert, or deploying a new hostname, read the private **cobox** repo
+> (`github.com/Cooperation-org/cobox` — deployers have access):
+> `README.md`, `app-registry.md`, `app-vm-best-practices.md`, `setup-new-app-vm.md`.
+> TLS terminates at the edge, **not** on the app VM; app VMs run nginx on **port 80 only**;
+> there is **no** wildcard cert and **no** certbot. Don't guess the routing — look it up there.
+
 **One Ansible playbook that stands up the earned-governance stack on a fresh VM.**
 
 earnkit composes tools that each work on their own — it contains no application
