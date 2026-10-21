@@ -1,0 +1,26 @@
+# Managed by earnkit (roles/documenso) — edits are overwritten on the next run.
+[Unit]
+Description=Documenso (document e-signing, Node) — {{ documenso_domain }}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ documenso_user }}
+Group={{ documenso_user }}
+# Same working directory and entry point as upstream's docker/start.sh.
+WorkingDirectory={{ documenso_src_dir }}/apps/remix
+EnvironmentFile={{ documenso_env_file }}
+Environment=NODE_ENV=production
+Environment=HOSTNAME={{ documenso_bind }}
+Environment=PATH={{ documenso_path_env }}
+ExecStart={{ documenso_node_dir }}/bin/node build/server/main.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+MemoryMax={{ documenso_memory_max }}
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -126,6 +126,7 @@ site.yml                  # the full-stack playbook (tags: base,rabbitmq,taiga,m
 playbooks/add-team.yml    # per-team provisioning (team-level resources ONLY, never individual users)
 playbooks/refresh-team.yml # give an EXISTING team what add-team has learned since (never touches its database)
 playbooks/sync-team-members.yml  # reconcile GovKit members -> team CRM users + Taiga memberships
+playbooks/documenso.yml   # Documenso e-signing (sign.<domain>); standalone, run on the VM; header lists the manual steps
 playbooks/upgrade-crm-addons.yml # odoo-bin -u for the custom addons across every team database
                           #   (the same work an addon repo's push triggers via /opt/earnkit/bin/update-crm-addons)
 roles/                    # one role per concern; no app code

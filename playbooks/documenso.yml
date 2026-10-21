@@ -1,0 +1,83 @@
+---
+# earnkit — Documenso (document e-signing) on the cohort VM, at
+# https://{{ documenso_domain }} (proposed: sign.workers.vc).
+#
+# Runs ONLY roles/documenso. It never touches another app's .env, unit or
+# nginx block, so it is safe on the live cohort VM (which is otherwise in
+# manual mode, see README). Run it ON the cohort VM itself, connection local.
+#
+# ---------------------------------------------------------------------------
+# Done by a person BEFORE the first run (the playbook checks 1 and 3 and stops)
+# ---------------------------------------------------------------------------
+# 1. Database on the shared Postgres (VM 100), with the owner's OK — the role
+#    never creates it. As the cluster admin:
+#      CREATE ROLE documenso_vc LOGIN PASSWORD '<password>';
+#      CREATE DATABASE documenso_vc OWNER documenso_vc;
+#    Documenso needs Postgres 14+. Its migrations create the tables.
+#
+# 2. Secrets (each at least 32 chars), e.g. `openssl rand -hex 32`, three times:
+#    documenso_nextauth_secret, documenso_encryption_key,
+#    documenso_encryption_secondary_key. The two encryption keys can never be
+#    changed once documents exist — keep a copy outside the VM.
+#
+# 3. Signing certificate (Documenso ships none; without it signing fails).
+#    Self-signed, per docs.documenso.com (self-hosting > signing certificate):
+#      openssl genrsa -out private.key 2048
+#      openssl req -new -x509 -key private.key -out certificate.crt -days 365
+#      read -s CERT_PASS; export CERT_PASS
+#      openssl pkcs12 -export -out certificate.p12 -inkey private.key \
+#        -in certificate.crt -password env:CERT_PASS
+#      sudo install -o root -g root -m 0600 certificate.p12 /etc/earnkit/documenso-cert.p12
+#      rm private.key certificate.crt certificate.p12
+#    The .p12 MUST have a password (documenso_signing_passphrase).
+#
+# 4. Outbound mail: a sender mailbox for workers.vc (mail is on Migadu) and its
+#    SMTP credentials -> documenso_smtp_*.
+#
+# 5. LinkedTrust SSO: register an OIDC client on the IdP ({{ oidc_issuer }})
+#    with redirect URI https://<documenso_domain>/api/auth/callback/oidc
+#    -> documenso_oidc_client_id / _secret.
+#
+# 6. Route: add <documenso_domain> -> 10.0.0.17:80 in Caddy on the Proxmox
+#    host (routing is changed on the host). DNS: *.workers.vc already resolves
+#    to the host.
+#
+# 7. Put the documenso_* values (inventory/example/group_vars/all.yml,
+#    Documenso section) in a root-only vars file on the VM:
+#      sudo install -m 0600 /dev/null /etc/earnkit/documenso-vars.yml
+#    (or ansible-vault encrypt it and add --ask-vault-pass below).
+#    database_host / database_port / oidc_issuer / cohort_domain already come
+#    from /opt/earnkit/stack/inventory-local/group_vars/cohort.yml.
+#    Port: check `ss -ltnp | grep :8020` is free first (documenso_http_port).
+#
+# 8. Stage this role + playbook into the VM's stack copy (no .git there):
+#      sudo rsync -a --chmod=D0755,F0644 <earnkit checkout>/roles/documenso/ /opt/earnkit/stack/roles/documenso/
+#      sudo install -m 0644 <earnkit checkout>/playbooks/documenso.yml /opt/earnkit/stack/playbooks/
+#
+# ---------------------------------------------------------------------------
+# Run (on the cohort VM)
+# ---------------------------------------------------------------------------
+#   sudo ANSIBLE_CONFIG=/opt/earnkit/stack/ansible.cfg \
+#        ANSIBLE_COLLECTIONS_PATH=/opt/earnkit/collections \
+#        /opt/earnkit/ansible-venv/bin/ansible-playbook \
+#        -i /opt/earnkit/stack/inventory-local \
+#        /opt/earnkit/stack/playbooks/documenso.yml \
+#        -e @/etc/earnkit/documenso-vars.yml
+#
+# First run builds from source (several minutes, memory-heavy).
+#
+# ---------------------------------------------------------------------------
+# After the first run
+# ---------------------------------------------------------------------------
+# - Check: curl -s http://127.0.0.1:<documenso_http_port>/api/health
+#          curl -s http://127.0.0.1:<documenso_http_port>/api/certificate-status
+# - First admin: sign up, then on VM 100 (database documenso_vc):
+#     UPDATE "User" SET roles = '{ADMIN}' WHERE email = '<email>';
+# - The .env (/opt/documenso/src/.env) is rendered once and then hand-edited;
+#   re-runs never overwrite it.
+# - Upgrade: bump documenso_version, re-run. The role rebuilds and migrates.
+- name: Documenso (document e-signing)
+  hosts: cohort
+  become: true
+  roles:
+    - { role: documenso, tags: [documenso] }

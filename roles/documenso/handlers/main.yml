@@ -1,0 +1,14 @@
+---
+- name: restart documenso
+  ansible.builtin.systemd:
+    name: documenso
+    state: restarted
+    daemon_reload: true
+
+# Guarded like workersvc: on a VM without nginx running yet, it picks the
+# fragment up when it first starts.
+- name: Reload nginx
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+  when: documenso_nginx_active.rc | default(1) == 0

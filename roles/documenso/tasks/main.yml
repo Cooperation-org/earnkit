@@ -1,0 +1,193 @@
+---
+# Documenso — open-source document e-signing (AGPL-3.0, github.com/documenso/documenso).
+# Native build per Documenso's "Manual Deployment" guide (Node + systemd), no
+# Docker (docs/DECISIONS.md #2); database on {{ database_host }}.
+# Pinned to a release tag; upgrade = bump documenso_version and re-run
+# playbooks/documenso.yml (read the release notes first).
+#
+# This role does NOT create the database or role on {{ database_host }}, and
+# does NOT create the signing certificate: both are done by a person first
+# (see playbooks/documenso.yml). It checks for them and stops if missing.
+
+- name: documenso apt packages (base role covers git/build/curl)
+  ansible.builtin.apt:
+    name:
+      - python3-psycopg2   # for the postgresql_ping check below (NOT the app)
+      - xz-utils           # the nodejs.org tarball
+    state: present
+
+- name: documenso system user
+  ansible.builtin.user:
+    name: "{{ documenso_user }}"
+    system: true
+    home: "{{ documenso_home }}"
+    shell: /usr/sbin/nologin
+    create_home: true
+
+# ---- preconditions a person sets up (fail early, before a long build) --------
+- name: Signing certificate present?
+  ansible.builtin.stat:
+    path: "{{ documenso_signing_cert_src }}"
+  register: documenso_cert
+
+- name: Stop if the signing certificate is missing
+  ansible.builtin.assert:
+    that:
+      - documenso_cert.stat.exists
+    fail_msg: >-
+      {{ documenso_signing_cert_src }} is missing. Without it Documenso starts
+      but every signing fails. Create it as described in
+      playbooks/documenso.yml (step 3).
+
+- name: "Database {{ documenso_db_name }} reachable as {{ documenso_db_user }}"
+  community.postgresql.postgresql_ping:
+    login_host: "{{ database_host }}"
+    login_port: "{{ database_port }}"
+    login_user: "{{ documenso_db_user }}"
+    login_password: "{{ documenso_db_password }}"
+    login_db: "{{ documenso_db_name }}"
+  register: documenso_db_ping
+
+- name: Stop if the database is not there or older than Postgres 14
+  ansible.builtin.assert:
+    that:
+      - documenso_db_ping.is_available
+      - documenso_db_ping.server_version.major | int >= 14
+    fail_msg: >-
+      Cannot log in to {{ documenso_db_name }} on {{ database_host }} as
+      {{ documenso_db_user }} (or server older than 14). Create the role and
+      database first (playbooks/documenso.yml, step 1).
+
+# ---- Node.js 24 for Documenso only -----------------------------------------------
+- name: Node.js {{ documenso_node_version }} tarball (checksum-verified)
+  ansible.builtin.get_url:
+    url: "https://nodejs.org/dist/v{{ documenso_node_version }}/node-v{{ documenso_node_version }}-linux-{{ documenso_node_arch }}.tar.xz"
+    dest: "{{ documenso_home }}/node-v{{ documenso_node_version }}-linux-{{ documenso_node_arch }}.tar.xz"
+    checksum: "sha256:https://nodejs.org/dist/v{{ documenso_node_version }}/SHASUMS256.txt"
+    mode: "0644"
+
+- name: Unpack Node.js
+  ansible.builtin.unarchive:
+    src: "{{ documenso_home }}/node-v{{ documenso_node_version }}-linux-{{ documenso_node_arch }}.tar.xz"
+    dest: "{{ documenso_home }}"
+    remote_src: true
+    creates: "{{ documenso_node_dir }}/bin/node"
+
+# ---- source at the pinned release tag ----------------------------------------------
+- name: Clone documenso {{ documenso_version }}
+  ansible.builtin.git:
+    repo: "{{ documenso_repo }}"
+    dest: "{{ documenso_src_dir }}"
+    version: "{{ documenso_version }}"
+    depth: 1
+    force: false
+  become_user: "{{ documenso_user }}"
+  register: documenso_git
+  notify: restart documenso
+
+- name: Signing certificate readable by documenso only
+  ansible.builtin.copy:
+    src: "{{ documenso_signing_cert_src }}"
+    dest: "{{ documenso_signing_cert_path }}"
+    remote_src: true
+    owner: "{{ documenso_user }}"
+    group: "{{ documenso_user }}"
+    mode: "0400"
+  notify: restart documenso
+
+# Rendered ONCE. force: false — a re-run never overwrites the live .env, so
+# hand edits on the box survive (README: runtime config is one hand-maintained
+# .env per app). To change a value later, edit this file on the box and
+# restart documenso.
+- name: documenso .env (first run only)
+  ansible.builtin.template:
+    src: documenso.env.j2
+    dest: "{{ documenso_env_file }}"
+    owner: "{{ documenso_user }}"
+    group: "{{ documenso_user }}"
+    mode: "0600"
+    force: false
+  notify: restart documenso
+
+- name: Built server present?
+  ansible.builtin.stat:
+    path: "{{ documenso_src_dir }}/apps/remix/build/server/main.js"
+  register: documenso_built
+
+# ---- build (only when the tag changed or there is no build yet) --------------------
+- name: npm ci
+  ansible.builtin.command: npm ci --no-audit --no-fund
+  args:
+    chdir: "{{ documenso_src_dir }}"
+  become_user: "{{ documenso_user }}"
+  environment:
+    PATH: "{{ documenso_path_env }}"
+    HUSKY: "0"
+  when: documenso_git.changed or not documenso_built.stat.exists
+
+# Same build target as upstream's Dockerfile (remix app + its dependencies).
+# The encryption keys are passed because upstream's Dockerfile sets them for
+# the build step too.
+- name: build @documenso/remix
+  ansible.builtin.command:
+    argv: [npx, turbo, run, build, "--filter=@documenso/remix..."]
+  args:
+    chdir: "{{ documenso_src_dir }}"
+  become_user: "{{ documenso_user }}"
+  environment:
+    PATH: "{{ documenso_path_env }}"
+    HUSKY: "0"
+    NEXT_TELEMETRY_DISABLED: "1"
+    NODE_OPTIONS: "--max-old-space-size={{ documenso_build_max_old_space_mb }}"
+    NEXT_PRIVATE_ENCRYPTION_KEY: "{{ documenso_encryption_key }}"
+    NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY: "{{ documenso_encryption_secondary_key }}"
+  when: documenso_git.changed or not documenso_built.stat.exists
+  notify: restart documenso
+
+# Reads the database URLs from the .env via the repo's own with:env script.
+- name: prisma migrate deploy
+  ansible.builtin.command: npm run prisma:migrate-deploy
+  args:
+    chdir: "{{ documenso_src_dir }}"
+  become_user: "{{ documenso_user }}"
+  environment:
+    PATH: "{{ documenso_path_env }}"
+  register: documenso_migrate
+  changed_when: "'No pending migrations' not in documenso_migrate.stdout"
+  notify: restart documenso
+
+# ---- systemd -----------------------------------------------------------------------
+- name: documenso unit
+  ansible.builtin.template:
+    src: documenso.service.j2
+    dest: /etc/systemd/system/documenso.service
+    mode: "0644"
+  register: documenso_unit
+  notify: restart documenso
+
+- name: documenso enabled + started
+  ansible.builtin.systemd:
+    name: documenso
+    enabled: true
+    state: started
+    daemon_reload: "{{ documenso_unit.changed }}"
+
+# ---- nginx server block ({{ documenso_domain }} on :80 -> node on loopback) ----------
+- name: Ensure /etc/nginx/earnkit exists
+  ansible.builtin.file:
+    path: /etc/nginx/earnkit
+    state: directory
+    mode: "0755"
+
+- name: Render documenso nginx server block
+  ansible.builtin.template:
+    src: nginx-documenso.conf.j2
+    dest: /etc/nginx/earnkit/documenso.conf
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Check whether nginx is active
+  ansible.builtin.command: systemctl is-active --quiet nginx
+  register: documenso_nginx_active
+  changed_when: false
+  failed_when: false

@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+# Documenso: the site reverse proxy (Caddy on the Proxmox host) sends
+# {{ documenso_domain }} to this VM on :80. TLS terminates upstream, hence plain
+# HTTP here and the hardcoded X-Forwarded-Proto.
+# Included by the nginx role from /etc/nginx/earnkit/.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ documenso_domain }};
+
+    client_max_body_size {{ documenso_max_upload_size }};
+    charset utf-8;
+
+    location / {
+        proxy_pass http://127.0.0.1:{{ documenso_http_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 120s;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}

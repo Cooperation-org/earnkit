@@ -253,6 +253,35 @@ workersvc_lt_client_secret: "VAULT-ME"
 workersvc_amebo_api_token: "VAULT-ME"
 
 # ---------------------------------------------------------------------------
+# Documenso (document e-signing, AGPL) — native build of a pinned release tag.
+# Separate playbook: playbooks/documenso.yml (its header lists what a person
+# sets up first: database, signing certificate, SMTP, OIDC client, route).
+# ---------------------------------------------------------------------------
+documenso_version: "v2.21.0"              # git tag of documenso/documenso
+documenso_domain: "sign.{{ cohort_domain }}"
+documenso_http_port: 8020                 # node on loopback; local nginx serves the domain on :80
+# Created by a person on database_host (the role does not create it):
+documenso_db_name: documenso_VMNAME
+documenso_db_user: documenso_VMNAME
+documenso_db_password: "VAULT-ME"
+# Each >= 32 chars (openssl rand -hex 32). Encryption keys are permanent.
+documenso_nextauth_secret: "VAULT-ME"
+documenso_encryption_key: "VAULT-ME"
+documenso_encryption_secondary_key: "VAULT-ME"
+documenso_signing_passphrase: "VAULT-ME"  # password of the .p12
+# Outbound mail (signing requests go out by email):
+documenso_smtp_host: smtp.example.org
+documenso_smtp_port: 465
+documenso_smtp_secure: "true"             # implicit TLS on 465; "false" for STARTTLS on 587
+documenso_smtp_user: "sign@{{ cohort_domain }}"
+documenso_smtp_password: "VAULT-ME"
+documenso_smtp_from_name: "Workers.vc Sign"
+documenso_smtp_from_address: "sign@{{ cohort_domain }}"
+# LinkedTrust SSO client (redirect https://<documenso_domain>/api/auth/callback/oidc):
+documenso_oidc_client_id: "lt_xxxxxxxxxxxxxxxx"
+documenso_oidc_client_secret: "VAULT-ME"
+
+# ---------------------------------------------------------------------------
 # Caddy API on Proxmox host (auto-provisions CRM subdomain routes + TLS)
 # add-team.yml calls this to register crm-<slug>.cohort_domain on the proxy.
 # ---------------------------------------------------------------------------

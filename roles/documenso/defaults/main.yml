@@ -1,0 +1,63 @@
+---
+# roles/documenso — role defaults (tuning knobs; all safe to leave as-is).
+#
+# The SITE contract comes from group_vars (see inventory/example/group_vars/all.yml):
+#   database_host, database_port, oidc_issuer, cohort_domain,
+#   documenso_version, documenso_domain, documenso_http_port,
+#   documenso_db_name, documenso_db_user, documenso_db_password,
+#   documenso_nextauth_secret, documenso_encryption_key,
+#   documenso_encryption_secondary_key, documenso_signing_passphrase,
+#   documenso_smtp_host, documenso_smtp_port, documenso_smtp_secure,
+#   documenso_smtp_user, documenso_smtp_password,
+#   documenso_smtp_from_name, documenso_smtp_from_address,
+#   documenso_oidc_client_id, documenso_oidc_client_secret
+# This role uses exactly those names and defines nothing that shadows them.
+
+# --- source ----------------------------------------------------------------------
+documenso_repo: https://github.com/documenso/documenso.git   # public, AGPL-3.0
+
+# --- Node.js ---------------------------------------------------------------------
+# Documenso needs Node >= 24 and npm >= 11.17 (its package.json "engines"). The
+# base role's system Node is 20.x and other services build with it, so Documenso
+# gets its own official nodejs.org build under its home instead of replacing the
+# system one. Checksum is verified against nodejs.org's SHASUMS256.txt.
+documenso_node_version: "24.22.0"    # bundles npm 11.19.1
+documenso_node_arch: x64
+
+# --- filesystem layout ---------------------------------------------------------------
+documenso_user: documenso
+documenso_home: /opt/documenso
+documenso_src_dir: "{{ documenso_home }}/src"       # the git checkout (pinned tag)
+documenso_node_dir: "{{ documenso_home }}/node-v{{ documenso_node_version }}-linux-{{ documenso_node_arch }}"
+# At the checkout root: the repo's npm scripts read ../../.env (dotenv-cli) for
+# prisma, and systemd reads it via EnvironmentFile=.
+documenso_env_file: "{{ documenso_src_dir }}/.env"
+# The signing certificate (.p12). NOT created by this role: a person makes it
+# (playbooks/documenso.yml step 3) and leaves it, root-only, at _src; the role
+# copies it to _path as owner documenso, mode 0400.
+documenso_signing_cert_src: /etc/earnkit/documenso-cert.p12
+documenso_signing_cert_path: "{{ documenso_home }}/cert.p12"
+
+# --- network ---------------------------------------------------------------------
+documenso_bind: "127.0.0.1"
+documenso_max_upload_size: 50m
+
+# --- behaviour ---------------------------------------------------------------------
+# Upload limit shown to users, in MB (Documenso's default is 5).
+documenso_document_size_upload_limit: 10
+# LinkedTrust's /.well-known advertises email_verified; Documenso refuses an
+# OIDC login whose ID token lacks email_verified=true unless this is "true".
+documenso_oidc_skip_verify: "false"
+documenso_oidc_provider_label: "LinkedTrust"
+# Empty = email/password signup stays open alongside LinkedTrust SSO.
+documenso_disable_email_password_signup: ""
+documenso_disable_telemetry: "true"
+
+# --- build / systemd tuning -------------------------------------------------------------
+# Upstream's Dockerfile builds with --max-old-space-size=8192.
+documenso_build_max_old_space_mb: 8192
+documenso_memory_max: 1G
+
+# --- derived (do not override) ------------------------------------------------------------
+documenso_database_url: "postgresql://{{ documenso_db_user }}:{{ documenso_db_password | urlencode }}@{{ database_host }}:{{ database_port }}/{{ documenso_db_name }}"
+documenso_path_env: "{{ documenso_node_dir }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
