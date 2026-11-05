@@ -2,6 +2,7 @@
 # crm-*.{{ cohort_domain }} root serves Elm (fast Svelte CRM front); Odoo serves the rest.
 # Auth on these hosts = LinkedTrust SSO via Odoo's own session (elm reuses the session_id
 # cookie; no elm login, no gate). Elm owns only its own routes: EXACTLY /, plus /_app, /c/,
+# its pages (/next, /board, /campaigns, /outreach, /team, /partners, ...),
 # /api/, /auth/ (elm's OIDC, != Odoo's /auth_oauth). Everything else — /web, /auth_oauth
 # (Odoo's LinkedTrust callback), /jsonrpc, /xmlrpc, reports, /websocket — stays on Odoo.
 server {
@@ -16,6 +17,7 @@ server {
     location /c/    { proxy_pass http://127.0.0.1:{{ elm_port | default(3007) }}; proxy_set_header Host $host; proxy_set_header X-Forwarded-Host $host; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Real-IP $remote_addr; }
     location /api/  { proxy_pass http://127.0.0.1:{{ elm_port | default(3007) }}; proxy_set_header Host $host; proxy_set_header X-Forwarded-Host $host; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Real-IP $remote_addr; }
     location /auth/ { proxy_pass http://127.0.0.1:{{ elm_port | default(3007) }}; proxy_set_header Host $host; proxy_set_header X-Forwarded-Host $host; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Real-IP $remote_addr; }
+    location ~ ^/(next|board|campaigns|outreach|team|partners|grants|events|research|news|channels|orgs|lead|warm)(/|$) { proxy_pass http://127.0.0.1:{{ elm_port | default(3007) }}; proxy_set_header Host $host; proxy_set_header X-Forwarded-Host $host; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Real-IP $remote_addr; }
 
     # ---- Odoo (default): /web, /auth_oauth, /jsonrpc, /xmlrpc, reports, ... ----
     location / {
