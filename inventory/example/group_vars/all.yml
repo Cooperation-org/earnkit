@@ -177,9 +177,10 @@ amebo_odoo_service_login: "amebo"
 amebo_odoo_service_password: "VAULT-ME"
 amebo_odoo_service_name: "amebo (agent)"
 # Taiga: ONE user, added as a member of each team's board. mcp-taiga — the CLI
-# the taiga_* tools drive — logs in with a password and mints its own JWT, so
-# the inventory's Application token (taiga_api_token, which GovKit uses) does
-# not fit here. Membership, not superuser: Taiga itself then keeps amebo out of
+# the taiga_* tools drive — authenticates with a long-lived Application token
+# for this user, minted in Taiga by playbooks/tasks/taiga-service-user.yml and
+# written to amebo's .env (never set it here). The password is the fallback
+# login. Membership, not superuser: Taiga itself then keeps amebo out of
 # boards it was never added to.
 amebo_taiga_service_login: "amebo"
 amebo_taiga_service_password: "VAULT-ME"

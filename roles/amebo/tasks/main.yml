@@ -84,6 +84,24 @@
 
 # ---- app config (.env is read by systemd EnvironmentFile AND python-dotenv,
 # and the migration runner takes DATABASE_URL from it — so template it first)
+# TAIGA_APP_TOKEN is minted in Taiga by playbooks/tasks/taiga-service-user.yml
+# and written there, not in the inventory; carry it over so re-templating the
+# .env does not drop it.
+- name: amebo .env (read existing, for TAIGA_APP_TOKEN)
+  ansible.builtin.slurp:
+    src: "{{ amebo_env_file }}"
+  register: amebo_env_existing
+  failed_when: false
+  no_log: true
+
+- name: amebo .env (keep TAIGA_APP_TOKEN)
+  ansible.builtin.set_fact:
+    amebo_taiga_app_token: >-
+      {{ (amebo_env_existing.content | default('') | b64decode)
+         | regex_search('(?m)^TAIGA_APP_TOKEN=(\S+)', '\1') | default([''], true) | first }}
+  when: amebo_taiga_app_token is not defined
+  no_log: true
+
 - name: amebo .env
   ansible.builtin.template:
     src: amebo.env.j2

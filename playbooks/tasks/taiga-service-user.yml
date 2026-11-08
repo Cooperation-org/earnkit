@@ -6,11 +6,13 @@
 #   1. the account itself (global — one user for the whole Taiga install)
 #   2. its membership of the team's project (per team)
 #
-# Why a password and not the Application token already in the inventory: amebo
-# drives Taiga through the shared `mcp-taiga` CLI, which authenticates with a
-# username and password and mints/refreshes a JWT itself. Taiga's Application
-# tokens use a different auth scheme that CLI does not speak, so handing it
-# that token produces 401s.
+# How amebo authenticates: a long-lived Taiga Application token for this
+# account, sent by the shared `mcp-taiga` CLI as "Authorization: Application
+# <token>" (TAIGA_APP_TOKEN, mcp-taiga 0fa5234+). This task mints it once —
+# an external_apps Application "mcp-taiga" plus an ApplicationToken for the
+# account — and writes it into amebo's .env. An existing token is reused, never
+# rotated, so re-runs do not break a running amebo. The password is still set
+# and kept in amebo's env as mcp-taiga's fallback login.
 #
 # Least privilege on purpose: NOT a superuser. amebo reaches a team's board
 # because it is a member of that board, so a bug or a bad prompt cannot walk
@@ -25,11 +27,14 @@
     cmd: |
       /opt/taiga/venv/bin/python /opt/taiga/taiga-back/manage.py shell <<'PY'
       import os
+      import secrets
       from django.apps import apps
 
       User = apps.get_model("users", "User")
       Project = apps.get_model("projects", "Project")
       Membership = apps.get_model("projects", "Membership")
+      Application = apps.get_model("external_apps", "Application")
+      ApplicationToken = apps.get_model("external_apps", "ApplicationToken")
 
       login = os.environ["SVC_LOGIN"]
       email = os.environ["SVC_EMAIL"]
@@ -65,9 +70,21 @@
       membership, m_created = Membership.objects.get_or_create(
           project=project, user=user,
           defaults=dict(role=role, email=user.email, is_admin=False))
-      print("user=%s membership=%s"
+
+      # The long-lived token mcp-taiga sends as "Authorization: Application".
+      app, _ = Application.objects.get_or_create(
+          id="mcp-taiga", defaults=dict(name="mcp-taiga"))
+      tok, _ = ApplicationToken.objects.get_or_create(user=user, application=app)
+      t_created = not tok.token
+      if t_created:
+          tok.token = secrets.token_urlsafe(32)
+          tok.save()
+
+      print("user=%s membership=%s token=%s"
             % ("created" if created else "updated",
-               "created" if m_created else "exists"))
+               "created" if m_created else "exists",
+               "created" if t_created else "exists"))
+      print("APP_TOKEN=%s" % tok.token)
       PY
   args:
     chdir: /opt/taiga/taiga-back
@@ -93,8 +110,15 @@
     msg: >-
       manage.py shell exited {{ amebo_taiga_user.rc | default('?') }} for board
       '{{ team_slug }}'. amebo's taiga_* tools will fail for this team until it
-      succeeds. {{ amebo_taiga_user.stdout | default('') | truncate(300) }}
+      succeeds. {{ amebo_taiga_user.stdout | default('') | regex_replace('APP_TOKEN=\\S+', 'APP_TOKEN=<redacted>') | truncate(300) }}
       {{ amebo_taiga_user.stderr | default('') | truncate(400) }}
   when: >-
     (amebo_taiga_user.rc | default(1)) != 0
     or 'FAIL:' in (amebo_taiga_user.stdout | default(''))
+
+- name: "amebo .env: TAIGA_APP_TOKEN"
+  ansible.builtin.include_role:
+    name: amebo
+    tasks_from: taiga-app-token
+  vars:
+    amebo_taiga_app_token: "{{ amebo_taiga_user.stdout | regex_search('APP_TOKEN=(\\S+)', '\\1') | first }}"

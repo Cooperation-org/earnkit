@@ -1,0 +1,16 @@
+---
+# Write amebo's long-lived Taiga Application token into its .env. Called from
+# playbooks/tasks/taiga-service-user.yml (which mints the token) via
+# include_role, so this role's paths and handler apply.
+# Requires: amebo_taiga_app_token.
+
+- name: amebo .env TAIGA_APP_TOKEN
+  ansible.builtin.lineinfile:
+    path: "{{ amebo_env_file }}"
+    regexp: '^TAIGA_APP_TOKEN='
+    line: "TAIGA_APP_TOKEN={{ amebo_taiga_app_token }}"
+    owner: "{{ amebo_user }}"
+    group: "{{ amebo_user }}"
+    mode: "0600"
+  no_log: true   # carries the token
+  notify: restart amebo-backend
