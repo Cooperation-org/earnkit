@@ -19,18 +19,23 @@ API (all JSON):
   POST /run/remove-team {"team_slug": ...}                   -> 202 {"job_id": ...}
        Reversible teardown only (unroute + drop the amebo instance row); the
        destructive purge stays operator-only, never machine-triggered.
-       409 if a job for that slug is already queued/running; 400 on bad input.
+       409 if a remove-team for that slug is already queued/running; 400 on bad input.
   POST /run/sync-members {"team_slug": ...}                  -> 202 {"job_id": ...}
        Reconcile that team's GovKit members into CRM (Odoo) + Taiga. Idempotent;
-       amebo calls it on invite accept. 409 if already queued/running.
+       amebo calls it on invite accept. Queues behind any other job for the same
+       team (e.g. a founder's add-team). 409 only if a sync for that team is
+       already QUEUED (not yet started) — a running one gets a fresh sync after it.
   GET  /jobs           -> most recent jobs, newest first
   GET  /jobs/<id>      -> one job + the tail of its playbook log
   GET  /health         -> {"ok": true}
 
 State: one JSON + one log file per job under RUNNER_STATE_DIR/jobs. Queue is
-in-memory (jobs queued but not started are lost on restart — visible as
-'queued' in state with no outcome; the caller's reconcile/retry covers that).
-Env: RUNNER_TOKEN (required), RUNNER_PORT, RUNNER_STATE_DIR, RUNNER_WRAPPER.
+in-memory, so jobs queued or running when the service stops never finish; at
+startup they are marked state 'lost' (otherwise their stale 'queued' would make
+every later identical request 409 forever). The caller's reconcile/retry and
+the sync-members timer cover the lost work.
+Env: RUNNER_TOKEN (required), RUNNER_PORT, RUNNER_STATE_DIR, RUNNER_WRAPPER,
+RUNNER_REMOVE_WRAPPER, RUNNER_SYNC_WRAPPER, RUNNER_USE_SUDO ("0" = tests only).
 """
 
 from __future__ import annotations
@@ -123,13 +128,37 @@ def _same_job_pending(action: str, slug: str) -> bool:
     founder simply sat un-provisioned until the ~5-minute timer swept them up.
     Different actions must be allowed to queue; the worker runs them in order,
     so the sync lands right after the stack it depends on is up.
+
+    sync-members coalesces only into a QUEUED sync, never a running one: the
+    playbook reads GovKit's member list in its first task, so a sync already
+    running when someone joins may have read the list before their membership
+    existed. Folding their request into it would drop them until the timer.
+    A queued sync has not read anything yet, so it will see them.
     """
+    pending = ("queued",) if action == "sync-members" else ("queued", "running")
     return any(
         j["team_slug"] == slug
         and j.get("action", "add-team") == action
-        and j["state"] in ("queued", "running")
+        and j["state"] in pending
         for j in _all_jobs()
     )
+
+
+def _mark_orphans_lost() -> None:
+    """At startup nothing is in the in-memory queue, so any job still recorded
+    as queued/running is an orphan from a previous process. Close it out."""
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    with _lock:
+        for job in _all_jobs():
+            if job.get("state") in ("queued", "running"):
+                job["state"] = "lost"
+                job["finished_at"] = now
+                _write_job(job)
+                logger.warning(
+                    "job %s (%s %s) was %s when the runner stopped; marked lost",
+                    job["job_id"], job.get("action", "add-team"), job["team_slug"],
+                    "queued" if not job.get("started_at") else "running",
+                )
 
 
 def _worker() -> None:
@@ -262,6 +291,7 @@ def main() -> None:
     if not TOKEN:
         raise SystemExit("RUNNER_TOKEN is not set; refusing to start without auth.")
     os.makedirs(JOBS_DIR, exist_ok=True)
+    _mark_orphans_lost()
     threading.Thread(target=_worker, daemon=True, name="job-worker").start()
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     logger.info("earnkit-runner listening on 127.0.0.1:%s", PORT)
