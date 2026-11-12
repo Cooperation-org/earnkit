@@ -216,7 +216,10 @@
     # non-zero, so the runner's job state and the timer stay honest.
     # A team+system is bad when the command failed or its script never printed
     # the 'SYNC-RESULT ok' marker. Built as a report block (Jinja has no list
-    # comprehensions); empty means everything succeeded.
+    # comprehensions); empty means everything succeeded. Caveat: ansible-core
+    # >= 2.19 turns a template that renders to nothing into None (not ''), and
+    # None | trim is the string 'None' (length 4) — so the checks below read it
+    # through default('', true), or a fully clean run fails with an empty list.
     - name: Collect per-team sync failures
       ansible.builtin.set_fact:
         sync_failures: |-
@@ -236,5 +239,5 @@
         msg: |
           Member sync did not complete cleanly. Both systems were attempted for
           every team, so the failures below did not block anybody else:
-          {{ sync_failures }}
-      when: sync_failures | trim | length > 0
+          {{ sync_failures | default('', true) }}
+      when: sync_failures | default('', true) | trim | length > 0
